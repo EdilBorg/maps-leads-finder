@@ -1,6 +1,6 @@
 /**
  * Maps Leads Finder - Backend
- * V5.1: ordenação por qualidade + filtros mínimos
+ * V5.3: erros claros + estado das APIs
  */
 
 require("dotenv").config();
@@ -19,8 +19,77 @@ app.use(express.static(path.join(__dirname)));
 const OUTSCRAPER_API_KEY = process.env.OUTSCRAPER_API_KEY || "";
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN || "";
 
+function hasOutscraper() {
+  return !!(OUTSCRAPER_API_KEY && !OUTSCRAPER_API_KEY.includes("colocar_"));
+}
+function hasApify() {
+  return !!(APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_"));
+}
+
+/** V5.3: traduz erros técnicos em mensagens úteis */
+function friendlyError(err, motor) {
+  const raw = (err && err.message) ? String(err.message) : String(err);
+  const lower = raw.toLowerCase();
+
+  if (lower.includes("não configurada") || lower.includes("não configurado") || lower.includes("colocar_")) {
+    return {
+      code: "NO_API_KEY",
+      error: "Falta a chave de API. Abre o ficheiro .env e preenche OUTSCRAPER_API_KEY e/ou APIFY_API_TOKEN (vê .env.example).",
+      hint: "cp .env.example .env  e  edita as chaves"
+    };
+  }
+  if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid api") || lower.includes("authentication")) {
+    return {
+      code: "INVALID_KEY",
+      error: "Chave de API inválida ou expirada (" + (motor || "API") + "). Verifica a key no .env.",
+      hint: "Outscraper: outscraper.com | Apify: console.apify.com/account/integrations"
+    };
+  }
+  if (lower.includes("402") || lower.includes("payment") || lower.includes("quota") || lower.includes("limit exceeded") || lower.includes("insufficient")) {
+    return {
+      code: "QUOTA",
+      error: "Quota grátis esgotada ou saldo em falta neste motor. Tenta o outro motor (Outscraper ↔ Apify) ou espera o reset mensal.",
+      hint: "No modo Automático a ferramenta tenta o motor alternativo quando um falha."
+    };
+  }
+  if (lower.includes("429") || lower.includes("rate limit") || lower.includes("too many")) {
+    return {
+      code: "RATE_LIMIT",
+      error: "Demasiados pedidos em pouco tempo. Espera 1–2 minutos e tenta de novo.",
+      hint: null
+    };
+  }
+  if (lower.includes("timeout") || lower.includes("aborted") || lower.includes("timed out")) {
+    return {
+      code: "TIMEOUT",
+      error: "A pesquisa demorou demasiado (comum no Apify em zonas grandes). Reduz o máx. de resultados ou escolhe uma cidade mais pequena.",
+      hint: null
+    };
+  }
+  if (lower.includes("status: failed") || lower.includes("terminou com status")) {
+    return {
+      code: "RUN_FAILED",
+      error: "O motor não conseguiu concluir a pesquisa. Tenta de novo ou muda para o outro motor.",
+      hint: raw
+    };
+  }
+  if (lower.includes("fetch failed") || lower.includes("econnrefused") || lower.includes("network") || lower.includes("enotfound")) {
+    return {
+      code: "NETWORK",
+      error: "Sem ligação à internet ou o serviço da API está indisponível. Verifica a rede e tenta outra vez.",
+      hint: null
+    };
+  }
+
+  return {
+    code: "UNKNOWN",
+    error: raw.length > 300 ? raw.slice(0, 300) + "…" : raw,
+    hint: "Se o problema continuar, troca de motor ou reduz o número de resultados."
+  };
+}
+
 async function searchOutscraper(query, limit = 50) {
-  if (!OUTSCRAPER_API_KEY || OUTSCRAPER_API_KEY.includes("colocar_")) {
+  if (!hasOutscraper()) {
     throw new Error("OUTSCRAPER_API_KEY não configurada. Coloca a chave no ficheiro .env");
   }
 
@@ -56,7 +125,7 @@ async function searchOutscraper(query, limit = 50) {
 }
 
 async function searchApify(query, location, limit = 50) {
-  if (!APIFY_API_TOKEN || APIFY_API_TOKEN.includes("colocar_")) {
+  if (!hasApify()) {
     throw new Error("APIFY_API_TOKEN não configurado. Coloca o token no ficheiro .env");
   }
 
@@ -145,7 +214,6 @@ function filterNoWebsite(places) {
   });
 }
 
-/** V5.1: filtra por nota e reviews mínimas */
 function filterQuality(places, minRating, minReviews) {
   return places.filter(p => {
     const rating = Number(p.rating) || 0;
@@ -156,27 +224,21 @@ function filterQuality(places, minRating, minReviews) {
   });
 }
 
-/**
- * V5.1: ordena por qualidade
- * Prioridade: mais reviews (negócio activo) + melhor nota
- */
 function sortByQuality(places) {
   return [...places].sort((a, b) => {
     const reviewsA = Number(a.reviews) || 0;
     const reviewsB = Number(b.reviews) || 0;
     const ratingA = Number(a.rating) || 0;
     const ratingB = Number(b.rating) || 0;
-
-    // Score: reviews pesam mais (prova de actividade), depois a nota
     const scoreA = reviewsA * 10 + ratingA * 100;
     const scoreB = reviewsB * 10 + ratingB * 100;
-
     if (scoreB !== scoreA) return scoreB - scoreA;
     return reviewsB - reviewsA;
   });
 }
 
 app.post("/api/search", async (req, res) => {
+  let usedMotor = req.body.motor || "auto";
   try {
     const {
       niche = "",
@@ -189,14 +251,18 @@ app.post("/api/search", async (req, res) => {
     } = req.body;
 
     if (!niche.trim()) {
-      return res.status(400).json({ error: "O campo 'nicho' é obrigatório." });
+      return res.status(400).json({
+        success: false,
+        code: "VALIDATION",
+        error: "Escreve o nicho (ex: cabeleireiros, oficinas).",
+        hint: null
+      });
     }
 
     const query = location ? `${niche}, ${location}` : niche;
     let places = [];
-    let usedMotor = motor;
+    usedMotor = motor;
 
-    // Pedir um pouco mais à API para compensar filtros de qualidade
     const fetchLimit = Math.min(Math.max(Number(maxResults) * 2, Number(maxResults)), 200);
 
     if (motor === "outscraper") {
@@ -207,20 +273,23 @@ app.post("/api/search", async (req, res) => {
       usedMotor = "apify";
     } else {
       try {
-        if (OUTSCRAPER_API_KEY && !OUTSCRAPER_API_KEY.includes("colocar_")) {
+        if (hasOutscraper()) {
           places = await searchOutscraper(query, fetchLimit);
           usedMotor = "outscraper";
-        } else if (APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_")) {
+        } else if (hasApify()) {
           places = await searchApify(niche, location, fetchLimit);
           usedMotor = "apify";
         } else {
           return res.status(400).json({
-            error: "Nenhuma API key configurada. Coloca OUTSCRAPER_API_KEY ou APIFY_API_TOKEN no ficheiro .env"
+            success: false,
+            code: "NO_API_KEY",
+            error: "Nenhuma API configurada. Preenche OUTSCRAPER_API_KEY ou APIFY_API_TOKEN no ficheiro .env.",
+            hint: "cp .env.example .env"
           });
         }
       } catch (err) {
-        if (APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_")) {
-          console.log("Outscraper falhou, a tentar Apify...", err.message);
+        if (hasApify() && usedMotor !== "apify") {
+          console.log("Fallback Outscraper → Apify:", err.message);
           places = await searchApify(niche, location, fetchLimit);
           usedMotor = "apify";
         } else {
@@ -229,11 +298,7 @@ app.post("/api/search", async (req, res) => {
       }
     }
 
-    if (onlyNoWebsite) {
-      places = filterNoWebsite(places);
-    }
-
-    // V5.1
+    if (onlyNoWebsite) places = filterNoWebsite(places);
     places = filterQuality(places, Number(minRating) || 0, Number(minReviews) || 0);
     places = sortByQuality(places);
     places = places.slice(0, Number(maxResults) || 50);
@@ -248,18 +313,32 @@ app.post("/api/search", async (req, res) => {
 
   } catch (error) {
     console.error("Erro na pesquisa:", error.message);
+    const f = friendlyError(error, usedMotor);
     res.status(500).json({
       success: false,
-      error: error.message
+      code: f.code,
+      error: f.error,
+      hint: f.hint,
+      motor: usedMotor
     });
   }
 });
 
 app.get("/api/status", (req, res) => {
+  const out = hasOutscraper();
+  const apify = hasApify();
   res.json({
-    outscraper: !!(OUTSCRAPER_API_KEY && !OUTSCRAPER_API_KEY.includes("colocar_")),
-    apify: !!(APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_")),
-    version: "5.1.0"
+    outscraper: out,
+    apify: apify,
+    ready: out || apify,
+    version: "5.3.0",
+    message: !out && !apify
+      ? "Nenhuma key no .env — configura OUTSCRAPER_API_KEY ou APIFY_API_TOKEN"
+      : out && apify
+        ? "Outscraper e Apify prontos"
+        : out
+          ? "Só Outscraper configurado"
+          : "Só Apify configurado"
   });
 });
 
@@ -268,7 +347,7 @@ app.get("*", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 Maps Leads Finder V5.1 em http://localhost:${PORT}`);
-  console.log(`   Outscraper: ${OUTSCRAPER_API_KEY && !OUTSCRAPER_API_KEY.includes("colocar_") ? "✅" : "❌"}`);
-  console.log(`   Apify:      ${APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_") ? "✅" : "❌"}\n`);
+  console.log(`\n🚀 Maps Leads Finder V5.3 em http://localhost:${PORT}`);
+  console.log(`   Outscraper: ${hasOutscraper() ? "✅" : "❌"}`);
+  console.log(`   Apify:      ${hasApify() ? "✅" : "❌"}\n`);
 });
