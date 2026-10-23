@@ -1,13 +1,6 @@
 /**
- * Maps Leads Finder - V2 Backend
- * Integração real com Outscraper e Apify
- *
- * Como usar:
- * 1. cp .env.example .env
- * 2. Coloca as tuas API keys no .env
- * 3. npm install
- * 4. npm start
- * 5. Abre http://localhost:3000
+ * Maps Leads Finder - Backend
+ * V5.1: ordenação por qualidade + filtros mínimos
  */
 
 require("dotenv").config();
@@ -21,18 +14,11 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname))); // serve o index.html
+app.use(express.static(path.join(__dirname)));
 
-// ============================================
-// CONFIGURAÇÃO - Lê as chaves do .env
-// ============================================
 const OUTSCRAPER_API_KEY = process.env.OUTSCRAPER_API_KEY || "";
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN || "";
 
-// ============================================
-// OUTSCRAPER
-// Docs: https://outscraper.com/api-docs/
-// ============================================
 async function searchOutscraper(query, limit = 50) {
   if (!OUTSCRAPER_API_KEY || OUTSCRAPER_API_KEY.includes("colocar_")) {
     throw new Error("OUTSCRAPER_API_KEY não configurada. Coloca a chave no ficheiro .env");
@@ -54,8 +40,6 @@ async function searchOutscraper(query, limit = 50) {
   }
 
   const data = await response.json();
-
-  // Outscraper devolve array de arrays (por query). Pegamos o primeiro.
   const places = Array.isArray(data[0]) ? data[0] : (Array.isArray(data) ? data : []);
 
   return places.map(p => ({
@@ -71,10 +55,6 @@ async function searchOutscraper(query, limit = 50) {
   }));
 }
 
-// ============================================
-// APIFY - Google Maps Scraper (compass/crawler-google-places)
-// Docs: https://apify.com/compass/crawler-google-places
-// ============================================
 async function searchApify(query, location, limit = 50) {
   if (!APIFY_API_TOKEN || APIFY_API_TOKEN.includes("colocar_")) {
     throw new Error("APIFY_API_TOKEN não configurado. Coloca o token no ficheiro .env");
@@ -82,7 +62,6 @@ async function searchApify(query, location, limit = 50) {
 
   const searchString = location ? `${query} ${location}` : query;
 
-  // 1. Iniciar o Actor
   const startRes = await fetch(
     `https://api.apify.com/v2/acts/compass~crawler-google-places/runs?token=${APIFY_API_TOKEN}`,
     {
@@ -107,10 +86,9 @@ async function searchApify(query, location, limit = 50) {
   const runId = runData.data.id;
   const defaultDatasetId = runData.data.defaultDatasetId;
 
-  // 2. Esperar o Actor terminar (polling simples)
   let status = "RUNNING";
   let attempts = 0;
-  const maxAttempts = 60; // ~2 minutos
+  const maxAttempts = 60;
 
   while ((status === "RUNNING" || status === "READY") && attempts < maxAttempts) {
     await sleep(2000);
@@ -126,7 +104,6 @@ async function searchApify(query, location, limit = 50) {
     throw new Error(`Apify run terminou com status: ${status}`);
   }
 
-  // 3. Buscar os resultados do dataset
   const datasetRes = await fetch(
     `https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${APIFY_API_TOKEN}&format=json&limit=${limit}`
   );
@@ -151,9 +128,6 @@ async function searchApify(query, location, limit = 50) {
   }));
 }
 
-// ============================================
-// UTILITÁRIOS
-// ============================================
 function extractCity(address) {
   if (!address) return "";
   const parts = address.split(",");
@@ -171,9 +145,37 @@ function filterNoWebsite(places) {
   });
 }
 
-// ============================================
-// ROTA PRINCIPAL DE PESQUISA
-// ============================================
+/** V5.1: filtra por nota e reviews mínimas */
+function filterQuality(places, minRating, minReviews) {
+  return places.filter(p => {
+    const rating = Number(p.rating) || 0;
+    const reviews = Number(p.reviews) || 0;
+    if (minRating > 0 && rating < minRating) return false;
+    if (minReviews > 0 && reviews < minReviews) return false;
+    return true;
+  });
+}
+
+/**
+ * V5.1: ordena por qualidade
+ * Prioridade: mais reviews (negócio activo) + melhor nota
+ */
+function sortByQuality(places) {
+  return [...places].sort((a, b) => {
+    const reviewsA = Number(a.reviews) || 0;
+    const reviewsB = Number(b.reviews) || 0;
+    const ratingA = Number(a.rating) || 0;
+    const ratingB = Number(b.rating) || 0;
+
+    // Score: reviews pesam mais (prova de actividade), depois a nota
+    const scoreA = reviewsA * 10 + ratingA * 100;
+    const scoreB = reviewsB * 10 + ratingB * 100;
+
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    return reviewsB - reviewsA;
+  });
+}
+
 app.post("/api/search", async (req, res) => {
   try {
     const {
@@ -181,7 +183,9 @@ app.post("/api/search", async (req, res) => {
       location = "",
       motor = "auto",
       onlyNoWebsite = true,
-      maxResults = 50
+      maxResults = 50,
+      minRating = 0,
+      minReviews = 0
     } = req.body;
 
     if (!niche.trim()) {
@@ -192,21 +196,22 @@ app.post("/api/search", async (req, res) => {
     let places = [];
     let usedMotor = motor;
 
-    // Lógica de escolha do motor
+    // Pedir um pouco mais à API para compensar filtros de qualidade
+    const fetchLimit = Math.min(Math.max(Number(maxResults) * 2, Number(maxResults)), 200);
+
     if (motor === "outscraper") {
-      places = await searchOutscraper(query, maxResults);
+      places = await searchOutscraper(query, fetchLimit);
       usedMotor = "outscraper";
     } else if (motor === "apify") {
-      places = await searchApify(niche, location, maxResults);
+      places = await searchApify(niche, location, fetchLimit);
       usedMotor = "apify";
     } else {
-      // AUTO: tenta Outscraper primeiro, se falhar ou não tiver key, usa Apify
       try {
         if (OUTSCRAPER_API_KEY && !OUTSCRAPER_API_KEY.includes("colocar_")) {
-          places = await searchOutscraper(query, maxResults);
+          places = await searchOutscraper(query, fetchLimit);
           usedMotor = "outscraper";
         } else if (APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_")) {
-          places = await searchApify(niche, location, maxResults);
+          places = await searchApify(niche, location, fetchLimit);
           usedMotor = "apify";
         } else {
           return res.status(400).json({
@@ -214,10 +219,9 @@ app.post("/api/search", async (req, res) => {
           });
         }
       } catch (err) {
-        // Fallback para Apify se Outscraper falhar
         if (APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_")) {
           console.log("Outscraper falhou, a tentar Apify...", err.message);
-          places = await searchApify(niche, location, maxResults);
+          places = await searchApify(niche, location, fetchLimit);
           usedMotor = "apify";
         } else {
           throw err;
@@ -225,19 +229,20 @@ app.post("/api/search", async (req, res) => {
       }
     }
 
-    // Filtro automático: apenas sem website
     if (onlyNoWebsite) {
       places = filterNoWebsite(places);
     }
 
-    // Limitar resultados
-    places = places.slice(0, maxResults);
+    // V5.1
+    places = filterQuality(places, Number(minRating) || 0, Number(minReviews) || 0);
+    places = sortByQuality(places);
+    places = places.slice(0, Number(maxResults) || 50);
 
     res.json({
       success: true,
       motor: usedMotor,
       total: places.length,
-      query: { niche, location },
+      query: { niche, location, minRating, minReviews },
       results: places
     });
 
@@ -250,22 +255,20 @@ app.post("/api/search", async (req, res) => {
   }
 });
 
-// Rota de estado das keys (para o frontend mostrar se estão configuradas)
 app.get("/api/status", (req, res) => {
   res.json({
     outscraper: !!(OUTSCRAPER_API_KEY && !OUTSCRAPER_API_KEY.includes("colocar_")),
     apify: !!(APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_")),
-    version: "2.0.0"
+    version: "5.1.0"
   });
 });
 
-// Fallback: servir o index.html
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 Maps Leads Finder V2 a correr em http://localhost:${PORT}`);
-  console.log(`   Outscraper: ${OUTSCRAPER_API_KEY && !OUTSCRAPER_API_KEY.includes("colocar_") ? "✅ configurado" : "❌ falta a key"}`);
-  console.log(`   Apify:      ${APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_") ? "✅ configurado" : "❌ falta o token"}\n`);
+  console.log(`\n🚀 Maps Leads Finder V5.1 em http://localhost:${PORT}`);
+  console.log(`   Outscraper: ${OUTSCRAPER_API_KEY && !OUTSCRAPER_API_KEY.includes("colocar_") ? "✅" : "❌"}`);
+  console.log(`   Apify:      ${APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_") ? "✅" : "❌"}\n`);
 });
