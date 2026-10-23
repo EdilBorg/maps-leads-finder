@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maps Leads Finder — Encontra empresas sem website</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .motor-card { transition: all 0.2s ease; }
+    .motor-card.selected { ring: 2px; ring-color: #3b82f6; border-color: #3b82f6; background: #1e3a5f; }
+    .loader {
+      border: 3px solid #334155;
+      border-top: 3px solid #3b82f6;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-lg">M</div>
+        <div>
+          <h1 class="font-semibold text-lg leading-tight">Maps Leads Finder</h1>
+          <p class="text-xs text-slate-400">Encontra empresas sem website · Open Source</p>
+        </div>
+      </div>
+      <div class="text-xs text-slate-500">V1 · Demo Mode</div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+
+    <!-- Escolha do Motor -->
+    <section class="mb-8">
+      <h2 class="text-sm font-medium text-slate-400 mb-3 uppercase tracking-wider">Escolhe o motor de pesquisa</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        
+        <div class="motor-card selected cursor-pointer border border-slate-700 rounded-xl p-4 bg-slate-900" data-motor="outscraper" onclick="selectMotor(this)">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-semibold">Outscraper</span>
+            <span class="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded-full">500 grátis/mês</span>
+          </div>
+          <p class="text-sm text-slate-400">Rápido e simples. Ideal para buscas pequenas.</p>
+        </div>
+
+        <div class="motor-card cursor-pointer border border-slate-700 rounded-xl p-4 bg-slate-900" data-motor="apify" onclick="selectMotor(this)">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-semibold">Apify</span>
+            <span class="text-xs bg-blue-900/50 text-blue-400 px-2 py-0.5 rounded-full">~1.200 grátis/mês</span>
+          </div>
+          <p class="text-sm text-slate-400">Mais volume. Melhor para várias cidades.</p>
+        </div>
+
+        <div class="motor-card cursor-pointer border border-slate-700 rounded-xl p-4 bg-slate-900" data-motor="auto" onclick="selectMotor(this)">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-semibold">Automático</span>
+            <span class="text-xs bg-purple-900/50 text-purple-400 px-2 py-0.5 rounded-full">Recomendado</span>
+          </div>
+          <p class="text-sm text-slate-400">A plataforma escolhe o melhor motor disponível.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Formulário de pesquisa -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+        <div>
+          <label class="block text-sm text-slate-400 mb-1.5">Nicho / Tipo de negócio</label>
+          <input id="niche" type="text" placeholder="Ex: cabeleireiros, oficinas, restaurantes..." 
+                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 transition" />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1.5">Localização (cidade ou país)</label>
+          <input id="location" type="text" placeholder="Ex: Lisboa, Porto, Portugal..." 
+                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 transition" />
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-4 mb-5">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input id="onlyNoWebsite" type="checkbox" checked class="w-4 h-4 rounded accent-blue-500" />
+          <span class="text-sm">Apenas empresas <strong>sem website</strong></span>
+        </label>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-400">Máx. resultados:</label>
+          <select id="maxResults" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+          </select>
+        </div>
+      </div>
+
+      <button onclick="startSearch()" id="searchBtn"
+              class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2.5 rounded-lg transition flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        Procurar leads
+      </button>
+    </section>
+
+    <!-- Estado de loading -->
+    <div id="loadingState" class="hidden flex flex-col items-center justify-center py-16 gap-4">
+      <div class="loader"></div>
+      <p class="text-slate-400">A procurar empresas... (modo demo)</p>
+    </div>
+
+    <!-- Resultados -->
+    <section id="resultsSection" class="hidden">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-lg font-semibold">Resultados</h2>
+          <p id="resultsCount" class="text-sm text-slate-400"></p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="exportCSV()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm px-4 py-2 rounded-lg transition">
+            Exportar CSV
+          </button>
+          <button onclick="exportExcel()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm px-4 py-2 rounded-lg transition">
+            Exportar Excel
+          </button>
+          <button onclick="exportPDF()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm px-4 py-2 rounded-lg transition">
+            Exportar PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto border border-slate-800 rounded-xl">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-900 text-slate-400 text-left">
+            <tr>
+              <th class="px-4 py-3 font-medium">Empresa</th>
+              <th class="px-4 py-3 font-medium">Telefone</th>
+              <th class="px-4 py-3 font-medium">Morada</th>
+              <th class="px-4 py-3 font-medium">Avaliação</th>
+              <th class="px-4 py-3 font-medium">Website</th>
+              <th class="px-4 py-3 font-medium">Cidade</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody" class="divide-y divide-slate-800">
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Aviso Demo -->
+    <div id="demoNotice" class="mt-8 bg-amber-950/40 border border-amber-800/50 rounded-xl p-4 text-sm text-amber-200/90">
+      <strong>Modo Demo (V1)</strong> — Os resultados abaixo são dados de exemplo. 
+      Na V2 ligamos as APIs reais do Outscraper e Apify. 
+      Coloca as tuas chaves no ficheiro <code class="bg-slate-800 px-1.5 py-0.5 rounded">.env</code> (vê <code class="bg-slate-800 px-1.5 py-0.5 rounded">.env.example</code>).
+    </div>
+
+  </main>
+
+  <footer class="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-500">
+    Maps Leads Finder · Open Source · Feito com ❤️ para encontrar leads sem website
+  </footer>
+
+  <script>
+    // ============================================
+    // CONFIGURAÇÃO — Coloca as tuas API keys aqui
+    // (ou melhor ainda: usa .env no backend na V2)
+    // ============================================
+    const CONFIG = {
+      OUTSCRAPER_API_KEY: "", // ← colocar_API_key_Outscraper_aqui
+      APIFY_API_TOKEN: "",    // ← colocar_API_token_Apify_aqui
+      MAX_RESULTS: 50,
+      FILTER_NO_WEBSITE: true
+    };
+
+    let selectedMotor = "outscraper";
+    let currentResults = [];
+
+    function selectMotor(el) {
+      document.querySelectorAll(".motor-card").forEach(c => c.classList.remove("selected"));
+      el.classList.add("selected");
+      selectedMotor = el.dataset.motor;
+    }
+
+    // Dados de demonstração (V1)
+    const DEMO_DATA = [
+      { name: "Barbearia do Bairro", phone: "+351 912 345 678", address: "Rua das Flores 12", rating: 4.7, reviews: 89, website: "", city: "Lisboa" },
+      { name: "Oficina Central Auto", phone: "+351 223 456 789", address: "Av. da República 45", rating: 4.3, reviews: 156, website: "", city: "Porto" },
+      { name: "Cabeleireiro Estilo", phone: "+351 961 234 567", address: "Praça da Liberdade 8", rating: 4.8, reviews: 203, website: "", city: "Braga" },
+      { name: "Restaurante Maré Alta", phone: "+351 289 123 456", address: "Rua do Comércio 33", rating: 4.5, reviews: 312, website: "", city: "Faro" },
+      { name: "Clínica Dentária Sorriso", phone: "+351 214 567 890", address: "Rua Augusta 120", rating: 4.9, reviews: 478, website: "", city: "Lisboa" },
+      { name: "Ginásio Força Total", phone: "+351 932 111 222", address: "Av. dos Aliados 67", rating: 4.2, reviews: 94, website: "", city: "Porto" },
+      { name: "Pet Shop Amigo Fiel", phone: "+351 253 987 654", address: "Rua de Santa Catarina 15", rating: 4.6, reviews: 67, website: "", city: "Braga" },
+      { name: "Padaria Pão Quente", phone: "+351 218 765 432", address: "Travessa do Forno 3", rating: 4.4, reviews: 128, website: "", city: "Lisboa" },
+      { name: "Oficina Moto Speed", phone: "+351 917 333 444", address: "Rua Industrial 88", rating: 4.1, reviews: 45, website: "", city: "Coimbra" },
+      { name: "Salão Beleza Pura", phone: "+351 964 555 666", address: "Av. da Boavista 200", rating: 4.7, reviews: 189, website: "", city: "Porto" }
+    ];
+
+    function startSearch() {
+      const niche = document.getElementById("niche").value.trim();
+      const location = document.getElementById("location").value.trim();
+
+      if (!niche || !location) {
+        alert("Preenche o nicho e a localização.");
+        return;
+      }
+
+      // Mostrar loading
+      document.getElementById("loadingState").classList.remove("hidden");
+      document.getElementById("resultsSection").classList.add("hidden");
+      document.getElementById("searchBtn").disabled = true;
+
+      // Simular delay de API (V1 = demo)
+      setTimeout(() => {
+        const onlyNoWebsite = document.getElementById("onlyNoWebsite").checked;
+        let results = [...DEMO_DATA];
+
+        if (onlyNoWebsite) {
+          results = results.filter(r => !r.website || r.website.trim() === "");
+        }
+
+        // Filtrar por cidade se o utilizador escreveu uma
+        const locLower = location.toLowerCase();
+        results = results.filter(r => 
+          r.city.toLowerCase().includes(locLower) || 
+          locLower.includes(r.city.toLowerCase()) ||
+          locLower.includes("portugal") ||
+          locLower === ""
+        );
+
+        // Se não houver match de cidade, mostra todos (demo)
+        if (results.length === 0) results = DEMO_DATA.filter(r => !r.website);
+
+        const max = parseInt(document.getElementById("maxResults").value);
+        results = results.slice(0, max);
+
+        currentResults = results;
+        renderResults(results, niche, location);
+
+        document.getElementById("loadingState").classList.add("hidden");
+        document.getElementById("resultsSection").classList.remove("hidden");
+        document.getElementById("searchBtn").disabled = false;
+      }, 1400);
+    }
+
+    function renderResults(results, niche, location) {
+      const tbody = document.getElementById("resultsBody");
+      tbody.innerHTML = "";
+
+      document.getElementById("resultsCount").textContent = 
+        `${results.length} empresas encontradas · ${niche} em ${location} · Motor: ${selectedMotor}`;
+
+      results.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-slate-900/50";
+        tr.innerHTML = `
+          <td class="px-4 py-3 font-medium">${r.name}</td>
+          <td class="px-4 py-3 text-slate-300">${r.phone || "—"}</td>
+          <td class="px-4 py-3 text-slate-400">${r.address || "—"}</td>
+          <td class="px-4 py-3">
+            <span class="text-amber-400">★</span> ${r.rating} <span class="text-slate-500 text-xs">(${r.reviews})</span>
+          </td>
+          <td class="px-4 py-3">
+            ${r.website ? `<a href="${r.website}" class="text-blue-400 hover:underline" target="_blank">Ver site</a>` : '<span class="text-green-400 text-xs font-medium">Sem website</span>'}
+          </td>
+          <td class="px-4 py-3 text-slate-400">${r.city}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function exportCSV() {
+      if (!currentResults.length) return alert("Nenhum resultado para exportar.");
+      const headers = ["Empresa", "Telefone", "Morada", "Avaliação", "Reviews", "Website", "Cidade"];
+      const rows = currentResults.map(r => [
+        r.name, r.phone, r.address, r.rating, r.reviews, r.website || "Sem website", r.city
+      ]);
+      const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+      downloadFile(csv, "leads-sem-website.csv", "text/csv");
+    }
+
+    function exportExcel() {
+      if (!currentResults.length) return alert("Nenhum resultado para exportar.");
+      const data = currentResults.map(r => ({
+        Empresa: r.name,
+        Telefone: r.phone,
+        Morada: r.address,
+        "Avaliação": r.rating,
+        Reviews: r.reviews,
+        Website: r.website || "Sem website",
+        Cidade: r.city
+      }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Leads");
+      XLSX.writeFile(wb, "leads-sem-website.xlsx");
+    }
+
+    function exportPDF() {
+      if (!currentResults.length) return alert("Nenhum resultado para exportar.");
+      // V1: gera uma página imprimível simples (o utilizador pode guardar como PDF)
+      const printWindow = window.open("", "_blank");
+      printWindow.document.write(`
+        <html><head><title>Leads sem website</title>
+        <style>body{font-family:sans-serif;padding:20px} table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:8px;text-align:left} th{background:#f5f5f5}</style>
+        </head><body>
+        <h1>Leads sem website</h1>
+        <p>Gerado por Maps Leads Finder · ${new Date().toLocaleString("pt-PT")}</p>
+        <table><thead><tr><th>Empresa</th><th>Telefone</th><th>Morada</th><th>Avaliação</th><th>Cidade</th></tr></thead>
+        <tbody>
+        ${currentResults.map(r => `<tr><td>${r.name}</td><td>${r.phone}</td><td>${r.address}</td><td>${r.rating} (${r.reviews})</td><td>${r.city}</td></tr>`).join("")}
+        </tbody></table>
+        </body></html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+
+    function downloadFile(content, filename, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
