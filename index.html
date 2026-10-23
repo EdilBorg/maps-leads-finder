@@ -3,70 +3,50 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Maps Leads Finder — Encontra empresas sem website</title>
+  <title>Maps Leads Finder</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    .motor-card { transition: all 0.2s ease; }
+    body { font-family: Inter, system-ui, sans-serif; }
     .motor-card.selected { border-color: #3b82f6; background: #1e3a5f; box-shadow: 0 0 0 2px #3b82f6; }
-    .loader {
-      border: 3px solid #334155;
-      border-top: 3px solid #3b82f6;
-      border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .loader { border: 3px solid #334155; border-top: 3px solid #3b82f6; border-radius: 50%; width: 28px; height: 28px; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
-
-  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+  <header class="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-50">
     <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center font-bold text-lg">M</div>
+        <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center font-bold">M</div>
         <div>
-          <h1 class="font-semibold text-lg leading-tight">Maps Leads Finder</h1>
-          <p class="text-xs text-slate-400">Encontra empresas sem website · Open Source</p>
+          <h1 class="font-semibold text-lg">Maps Leads Finder</h1>
+          <p class="text-xs text-slate-400">Empresas sem website · Open Source</p>
         </div>
       </div>
       <div class="flex items-center gap-3">
         <div id="apiStatus" class="text-xs text-slate-500">A verificar APIs...</div>
-        <div class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">V4</div>
+        <div class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">V5.2</div>
       </div>
     </div>
   </header>
 
   <main class="max-w-6xl mx-auto px-4 py-8">
-
     <section class="mb-8">
-      <h2 class="text-sm font-medium text-slate-400 mb-3 uppercase tracking-wider">Escolhe o motor de pesquisa</h2>
+      <h2 class="text-sm font-medium text-slate-400 mb-3 uppercase tracking-wider">Motor de pesquisa</h2>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div class="motor-card selected cursor-pointer border border-slate-700 rounded-xl p-4 bg-slate-900" data-motor="outscraper" onclick="selectMotor(this)">
-          <div class="flex items-center justify-between mb-2">
-            <span class="font-semibold">Outscraper</span>
-            <span class="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded-full">500 grátis/mês</span>
-          </div>
-          <p class="text-sm text-slate-400">Rápido e simples. Ideal para buscas pequenas.</p>
+          <div class="flex justify-between mb-2"><span class="font-semibold">Outscraper</span><span class="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded-full">500 grátis/mês</span></div>
+          <p class="text-sm text-slate-400">Rápido. Buscas pequenas.</p>
         </div>
         <div class="motor-card cursor-pointer border border-slate-700 rounded-xl p-4 bg-slate-900" data-motor="apify" onclick="selectMotor(this)">
-          <div class="flex items-center justify-between mb-2">
-            <span class="font-semibold">Apify</span>
-            <span class="text-xs bg-blue-900/50 text-blue-400 px-2 py-0.5 rounded-full">~1.200 grátis/mês</span>
-          </div>
-          <p class="text-sm text-slate-400">Mais volume. Melhor para várias cidades.</p>
+          <div class="flex justify-between mb-2"><span class="font-semibold">Apify</span><span class="text-xs bg-blue-900/50 text-blue-400 px-2 py-0.5 rounded-full">~1.200 grátis/mês</span></div>
+          <p class="text-sm text-slate-400">Mais volume.</p>
         </div>
         <div class="motor-card cursor-pointer border border-slate-700 rounded-xl p-4 bg-slate-900" data-motor="auto" onclick="selectMotor(this)">
-          <div class="flex items-center justify-between mb-2">
-            <span class="font-semibold">Automático</span>
-            <span class="text-xs bg-purple-900/50 text-purple-400 px-2 py-0.5 rounded-full">Recomendado</span>
-          </div>
-          <p class="text-sm text-slate-400">A plataforma escolhe o melhor motor disponível.</p>
+          <div class="flex justify-between mb-2"><span class="font-semibold">Automático</span><span class="text-xs bg-purple-900/50 text-purple-400 px-2 py-0.5 rounded-full">Recomendado</span></div>
+          <p class="text-sm text-slate-400">Escolhe o motor disponível.</p>
         </div>
       </div>
     </section>
@@ -74,23 +54,21 @@
     <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-8">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
         <div>
-          <label class="block text-sm text-slate-400 mb-1.5">Nicho / Tipo de negócio</label>
-          <input id="niche" type="text" placeholder="Ex: cabeleireiros, oficinas, restaurantes..."
-                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 transition" />
+          <label class="block text-sm text-slate-400 mb-1.5">Nicho</label>
+          <input id="niche" type="text" placeholder="cabeleireiros, oficinas..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500" />
         </div>
         <div>
-          <label class="block text-sm text-slate-400 mb-1.5">Localização (cidade ou país)</label>
-          <input id="location" type="text" placeholder="Ex: Lisboa, Porto, Portugal..."
-                 class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500 transition" />
+          <label class="block text-sm text-slate-400 mb-1.5">Localização</label>
+          <input id="location" type="text" placeholder="Lisboa, Porto, Portugal..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 focus:outline-none focus:border-blue-500" />
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-4 mb-5">
         <label class="flex items-center gap-2 cursor-pointer">
-          <input id="onlyNoWebsite" type="checkbox" checked class="w-4 h-4 rounded accent-blue-500" />
-          <span class="text-sm">Apenas empresas <strong>sem website</strong></span>
+          <input id="onlyNoWebsite" type="checkbox" checked class="w-4 h-4 accent-blue-500" />
+          <span class="text-sm">Apenas <strong>sem website</strong></span>
         </label>
         <div class="flex items-center gap-2">
-          <label class="text-sm text-slate-400">Máx. resultados:</label>
+          <label class="text-sm text-slate-400">Máx.:</label>
           <select id="maxResults" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm">
             <option value="25">25</option>
             <option value="50" selected>50</option>
@@ -98,21 +76,34 @@
             <option value="200">200</option>
           </select>
         </div>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-400">Nota mín.:</label>
+          <select id="minRating" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm">
+            <option value="0" selected>Qualquer</option>
+            <option value="3">3.0+</option>
+            <option value="3.5">3.5+</option>
+            <option value="4">4.0+</option>
+            <option value="4.5">4.5+</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-400">Reviews mín.:</label>
+          <select id="minReviews" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm">
+            <option value="0" selected>Qualquer</option>
+            <option value="5">5+</option>
+            <option value="10">10+</option>
+            <option value="20">20+</option>
+            <option value="50">50+</option>
+          </select>
+        </div>
       </div>
-      <button onclick="startSearch()" id="searchBtn"
-              class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2.5 rounded-lg transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        Procurar leads
-      </button>
+      <button onclick="startSearch()" id="searchBtn" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2.5 rounded-lg disabled:opacity-50">Procurar leads</button>
     </section>
 
-    <div id="loadingState" class="hidden flex flex-col items-center justify-center py-16 gap-4">
+    <div id="loadingState" class="hidden flex flex-col items-center py-16 gap-4">
       <div class="loader"></div>
-      <p id="loadingText" class="text-slate-400">A procurar empresas...</p>
+      <p id="loadingText" class="text-slate-400">A procurar...</p>
     </div>
-
     <div id="errorState" class="hidden bg-red-950/40 border border-red-800/50 rounded-xl p-4 text-sm text-red-200 mb-6">
       <strong>Erro:</strong> <span id="errorMessage"></span>
     </div>
@@ -124,21 +115,22 @@
           <p id="resultsCount" class="text-sm text-slate-400"></p>
         </div>
         <div class="flex gap-2">
-          <button onclick="exportCSV()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm px-4 py-2 rounded-lg transition">Exportar CSV</button>
-          <button onclick="exportExcel()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm px-4 py-2 rounded-lg transition">Exportar Excel</button>
-          <button onclick="exportPDF()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition">Exportar PDF</button>
+          <button onclick="exportCSV()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm px-4 py-2 rounded-lg">CSV</button>
+          <button onclick="exportExcel()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm px-4 py-2 rounded-lg">Excel</button>
+          <button onclick="exportPDF()" class="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg">PDF</button>
         </div>
       </div>
       <div class="overflow-x-auto border border-slate-800 rounded-xl">
         <table class="w-full text-sm">
           <thead class="bg-slate-900 text-slate-400 text-left">
             <tr>
-              <th class="px-4 py-3 font-medium">Empresa</th>
-              <th class="px-4 py-3 font-medium">Telefone</th>
-              <th class="px-4 py-3 font-medium">Morada</th>
-              <th class="px-4 py-3 font-medium">Avaliação</th>
-              <th class="px-4 py-3 font-medium">Website</th>
-              <th class="px-4 py-3 font-medium">Cidade</th>
+              <th class="px-4 py-3">Empresa</th>
+              <th class="px-4 py-3">Telefone</th>
+              <th class="px-4 py-3">Morada</th>
+              <th class="px-4 py-3">Avaliação</th>
+              <th class="px-4 py-3">Website</th>
+              <th class="px-4 py-3">Cidade</th>
+              <th class="px-4 py-3">Acções</th>
             </tr>
           </thead>
           <tbody id="resultsBody" class="divide-y divide-slate-800"></tbody>
@@ -146,18 +138,12 @@
       </div>
     </section>
 
-    <div id="configNotice" class="mt-8 bg-slate-900 border border-slate-700 rounded-xl p-4 text-sm text-slate-300">
-      <strong class="text-white">Como ativar as APIs reais:</strong><br>
-      1. Copia <code class="bg-slate-800 px-1.5 py-0.5 rounded">.env.example</code> para <code class="bg-slate-800 px-1.5 py-0.5 rounded">.env</code><br>
-      2. Coloca as tuas chaves (Outscraper e/ou Apify)<br>
-      3. Corre <code class="bg-slate-800 px-1.5 py-0.5 rounded">npm install && npm start</code><br>
-      4. Abre <code class="bg-slate-800 px-1.5 py-0.5 rounded">http://localhost:3000</code>
+    <div class="mt-8 bg-slate-900 border border-slate-700 rounded-xl p-4 text-sm text-slate-300">
+      <strong class="text-white">APIs:</strong> copia <code class="bg-slate-800 px-1 rounded">.env.example</code> → <code class="bg-slate-800 px-1 rounded">.env</code>, coloca as keys, <code class="bg-slate-800 px-1 rounded">npm install && npm start</code>
     </div>
   </main>
 
-  <footer class="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-500">
-    Maps Leads Finder V4 · Open Source · PDF profissional · Feito com ❤️
-  </footer>
+  <footer class="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-500">Maps Leads Finder V5.2 · Open Source</footer>
 
   <script>
     let selectedMotor = "outscraper";
@@ -169,15 +155,10 @@
         const res = await fetch("/api/status");
         const data = await res.json();
         const el = document.getElementById("apiStatus");
-        if (data.outscraper && data.apify) {
-          el.innerHTML = '<span class="text-green-400">Outscraper + Apify ✅</span>';
-        } else if (data.outscraper) {
-          el.innerHTML = '<span class="text-green-400">Outscraper ✅</span> <span class="text-slate-500">| Apify ❌</span>';
-        } else if (data.apify) {
-          el.innerHTML = '<span class="text-slate-500">Outscraper ❌</span> <span class="text-green-400">| Apify ✅</span>';
-        } else {
-          el.innerHTML = '<span class="text-amber-400">APIs não configuradas</span>';
-        }
+        if (data.outscraper && data.apify) el.innerHTML = '<span class="text-green-400">Outscraper + Apify ✅</span>';
+        else if (data.outscraper) el.innerHTML = '<span class="text-green-400">Outscraper ✅</span>';
+        else if (data.apify) el.innerHTML = '<span class="text-green-400">Apify ✅</span>';
+        else el.innerHTML = '<span class="text-amber-400">APIs não configuradas</span>';
       } catch (e) {
         document.getElementById("apiStatus").innerHTML = '<span class="text-amber-400">Backend offline</span>';
       }
@@ -193,31 +174,25 @@
       const niche = document.getElementById("niche").value.trim();
       const location = document.getElementById("location").value.trim();
       if (!niche) { alert("Preenche o nicho."); return; }
-
       document.getElementById("loadingState").classList.remove("hidden");
       document.getElementById("resultsSection").classList.add("hidden");
       document.getElementById("errorState").classList.add("hidden");
       document.getElementById("searchBtn").disabled = true;
-      document.getElementById("loadingText").textContent =
-        selectedMotor === "apify"
-          ? "A correr Apify (pode demorar 30-90 segundos)..."
-          : "A procurar empresas...";
-
+      document.getElementById("loadingText").textContent = selectedMotor === "apify" ? "Apify (30-90s)..." : "A procurar...";
       try {
         const res = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            niche,
-            location,
-            motor: selectedMotor,
+            niche, location, motor: selectedMotor,
             onlyNoWebsite: document.getElementById("onlyNoWebsite").checked,
-            maxResults: parseInt(document.getElementById("maxResults").value)
+            maxResults: parseInt(document.getElementById("maxResults").value),
+            minRating: parseFloat(document.getElementById("minRating").value) || 0,
+            minReviews: parseInt(document.getElementById("minReviews").value) || 0
           })
         });
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || "Erro desconhecido");
-
+        if (!res.ok || !data.success) throw new Error(data.error || "Erro");
         currentResults = data.results || [];
         lastSearchMeta = { niche, location, motor: data.motor || selectedMotor };
         renderResults(currentResults, niche, location, data.motor);
@@ -235,196 +210,117 @@
       const tbody = document.getElementById("resultsBody");
       tbody.innerHTML = "";
       document.getElementById("resultsCount").textContent =
-        `${results.length} empresas encontradas · ${niche}${location ? " em " + location : ""} · Motor: ${motorUsed || selectedMotor}`;
-
-      if (results.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Nenhuma empresa sem website encontrada.</td></tr>`;
+        results.length + " empresas (melhor qualidade primeiro) · " + niche + (location ? " em " + location : "") + " · " + (motorUsed || selectedMotor);
+      if (!results.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Nenhum resultado.</td></tr>';
         return;
       }
-
       results.forEach(r => {
         const tr = document.createElement("tr");
         tr.className = "hover:bg-slate-900/50";
-        tr.innerHTML = `
-          <td class="px-4 py-3 font-medium">${escapeHtml(r.name)}</td>
-          <td class="px-4 py-3 text-slate-300">${escapeHtml(r.phone) || "—"}</td>
-          <td class="px-4 py-3 text-slate-400">${escapeHtml(r.address) || "—"}</td>
-          <td class="px-4 py-3">${r.rating ? `<span class="text-amber-400">★</span> ${r.rating} <span class="text-slate-500 text-xs">(${r.reviews || 0})</span>` : "—"}</td>
-          <td class="px-4 py-3">${r.website ? `<a href="${escapeHtml(r.website)}" class="text-blue-400 hover:underline" target="_blank" rel="noopener">Ver site</a>` : '<span class="text-green-400 text-xs font-medium">Sem website</span>'}</td>
-          <td class="px-4 py-3 text-slate-400">${escapeHtml(r.city) || "—"}</td>
-        `;
+        const phoneClean = (r.phone || "").replace(/[^\d+]/g, "");
+        const waNum = phoneClean.replace(/^\+/, "").replace(/^00/, "");
+        const mapsQ = encodeURIComponent([r.name, r.address, r.city].filter(Boolean).join(", "));
+        tr.innerHTML =
+          '<td class="px-4 py-3 font-medium">' + escapeHtml(r.name) + '</td>' +
+          '<td class="px-4 py-3 text-slate-300">' + (escapeHtml(r.phone) || "—") + '</td>' +
+          '<td class="px-4 py-3 text-slate-400">' + (escapeHtml(r.address) || "—") + '</td>' +
+          '<td class="px-4 py-3">' + (r.rating ? '★ ' + r.rating + ' <span class="text-slate-500 text-xs">(' + (r.reviews || 0) + ')</span>' : '—') + '</td>' +
+          '<td class="px-4 py-3">' + (r.website ? '<a class="text-blue-400" target="_blank" rel="noopener" href="' + escapeHtml(r.website) + '">Site</a>' : '<span class="text-green-400 text-xs">Sem website</span>') + '</td>' +
+          '<td class="px-4 py-3 text-slate-400">' + (escapeHtml(r.city) || "—") + '</td>' +
+          '<td class="px-4 py-3 whitespace-nowrap"><div class="flex flex-wrap gap-1">' +
+            (r.phone ? '<button type="button" data-phone="' + escapeHtml(r.phone) + '" onclick="copyPhone(this.getAttribute(\'data-phone\'))" class="text-xs bg-slate-800 border border-slate-600 px-2 py-1 rounded hover:bg-slate-700">Copiar</button>' : '') +
+            (waNum ? '<a href="https://wa.me/' + waNum + '" target="_blank" rel="noopener" class="text-xs bg-green-900/40 text-green-300 border border-green-800/60 px-2 py-1 rounded">WhatsApp</a>' : '') +
+            '<a href="https://www.google.com/maps/search/?api=1&query=' + mapsQ + '" target="_blank" rel="noopener" class="text-xs bg-slate-800 border border-slate-600 px-2 py-1 rounded hover:bg-slate-700">Maps</a>' +
+          '</div></td>';
         tbody.appendChild(tr);
       });
     }
 
     function escapeHtml(text) {
       if (!text) return "";
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
+      const d = document.createElement("div");
+      d.textContent = text;
+      return d.innerHTML;
+    }
+
+    function copyPhone(phone) {
+      if (!phone) return;
+      navigator.clipboard.writeText(phone).then(() => {
+        const t = document.createElement("div");
+        t.textContent = "Telefone copiado";
+        t.className = "fixed bottom-4 right-4 bg-green-700 text-white text-sm px-4 py-2 rounded-lg z-50";
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 1500);
+      }).catch(() => alert(phone));
     }
 
     function exportCSV() {
-      if (!currentResults.length) return alert("Nenhum resultado para exportar.");
-      const headers = ["Empresa", "Telefone", "Morada", "Avaliação", "Reviews", "Website", "Cidade"];
-      const rows = currentResults.map(r => [r.name, r.phone, r.address, r.rating, r.reviews, r.website || "Sem website", r.city]);
-      const csv = [headers, ...rows].map(row => row.map(cell => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-      downloadFile("\uFEFF" + csv, "leads-sem-website.csv", "text/csv;charset=utf-8");
+      if (!currentResults.length) return alert("Sem resultados");
+      const headers = ["Empresa","Telefone","Morada","Avaliação","Reviews","Website","Cidade"];
+      const rows = currentResults.map(r => [r.name,r.phone,r.address,r.rating,r.reviews,r.website||"Sem website",r.city]);
+      const csv = [headers,...rows].map(row => row.map(c => '"'+String(c??"").replace(/"/g,'""')+'"').join(",")).join("\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+      a.download = "leads-sem-website.csv"; a.click();
     }
 
     function exportExcel() {
-      if (!currentResults.length) return alert("Nenhum resultado para exportar.");
-      const data = currentResults.map(r => ({
-        Empresa: r.name, Telefone: r.phone, Morada: r.address,
-        "Avaliação": r.rating, Reviews: r.reviews,
-        Website: r.website || "Sem website", Cidade: r.city
-      }));
+      if (!currentResults.length) return alert("Sem resultados");
+      const data = currentResults.map(r => ({Empresa:r.name,Telefone:r.phone,Morada:r.address,"Avaliação":r.rating,Reviews:r.reviews,Website:r.website||"Sem website",Cidade:r.city}));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Leads");
       XLSX.writeFile(wb, "leads-sem-website.xlsx");
     }
 
-    /**
-     * PDF profissional (V4)
-     * - Cabeçalho com título e data
-     * - Critérios da pesquisa
-     * - Tabela formatada
-     * - Rodapé com número de página
-     */
     function exportPDF() {
-      if (!currentResults.length) return alert("Nenhum resultado para exportar.");
-
+      if (!currentResults.length) return alert("Sem resultados");
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 14;
       const now = new Date();
-      const dateStr = now.toLocaleDateString("pt-PT", { day: "2-digit", month: "long", year: "numeric" });
-      const timeStr = now.toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" });
-
-      // --- Cabeçalho ---
-      doc.setFillColor(30, 64, 175); // azul profissional
+      doc.setFillColor(30, 64, 175);
       doc.rect(0, 0, pageWidth, 28, "F");
-
-      doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
+      doc.setTextColor(255,255,255);
+      doc.setFont("helvetica","bold"); doc.setFontSize(16);
       doc.text("Maps Leads Finder", margin, 12);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text("Relatório de empresas sem website", margin, 20);
-
+      doc.setFont("helvetica","normal"); doc.setFontSize(10);
+      doc.text("Empresas sem website", margin, 20);
       doc.setFontSize(9);
-      doc.text(`${dateStr} · ${timeStr}`, pageWidth - margin, 12, { align: "right" });
-      doc.text(`${currentResults.length} leads`, pageWidth - margin, 20, { align: "right" });
-
-      // --- Info da pesquisa ---
+      doc.text(now.toLocaleString("pt-PT"), pageWidth - margin, 12, { align: "right" });
+      doc.text(currentResults.length + " leads", pageWidth - margin, 20, { align: "right" });
       let y = 36;
-      doc.setTextColor(40, 40, 40);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text("Critérios da pesquisa", margin, y);
-
-      y += 6;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(80, 80, 80);
-
-      const niche = lastSearchMeta.niche || "—";
-      const location = lastSearchMeta.location || "—";
-      const motor = lastSearchMeta.motor || "—";
-
-      doc.text(`Nicho: ${niche}`, margin, y);
-      doc.text(`Localização: ${location}`, margin + 70, y);
-      doc.text(`Motor: ${motor}`, margin + 150, y);
-      doc.text(`Filtro: apenas sem website`, margin + 200, y);
-
-      // Linha separadora
-      y += 5;
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.3);
-      doc.line(margin, y, pageWidth - margin, y);
-
-      // --- Tabela ---
-      const tableData = currentResults.map((r, i) => [
-        String(i + 1),
-        r.name || "—",
-        r.phone || "—",
-        r.address || "—",
-        r.rating ? `${r.rating} (${r.reviews || 0})` : "—",
-        r.city || "—",
-        r.website ? "Tem site" : "Sem website"
-      ]);
-
+      doc.setTextColor(40,40,40); doc.setFont("helvetica","bold"); doc.setFontSize(10);
+      doc.text("Critérios", margin, y);
+      y += 6; doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(80,80,80);
+      doc.text("Nicho: " + (lastSearchMeta.niche||"—"), margin, y);
+      doc.text("Local: " + (lastSearchMeta.location||"—"), margin+80, y);
+      doc.text("Motor: " + (lastSearchMeta.motor||"—"), margin+160, y);
+      y += 5; doc.setDrawColor(200,200,200); doc.line(margin, y, pageWidth-margin, y);
+      const tableData = currentResults.map((r,i) => [String(i+1), r.name||"—", r.phone||"—", r.address||"—", r.rating ? r.rating+" ("+(r.reviews||0)+")" : "—", r.city||"—", r.website?"Tem site":"Sem website"]);
       doc.autoTable({
-        startY: y + 4,
-        head: [["#", "Empresa", "Telefone", "Morada", "Avaliação", "Cidade", "Website"]],
+        startY: y+4,
+        head: [["#","Empresa","Telefone","Morada","Avaliação","Cidade","Website"]],
         body: tableData,
         theme: "grid",
-        styles: {
-          font: "helvetica",
-          fontSize: 8,
-          cellPadding: 2.5,
-          overflow: "linebreak",
-          valign: "middle"
-        },
-        headStyles: {
-          fillColor: [30, 64, 175],
-          textColor: [255, 255, 255],
-          fontStyle: "bold",
-          fontSize: 8
-        },
-        alternateRowStyles: {
-          fillColor: [245, 247, 250]
-        },
-        columnStyles: {
-          0: { cellWidth: 10, halign: "center" },
-          1: { cellWidth: 45 },
-          2: { cellWidth: 32 },
-          3: { cellWidth: 55 },
-          4: { cellWidth: 28, halign: "center" },
-          5: { cellWidth: 28 },
-          6: { cellWidth: 28, halign: "center" }
-        },
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [30,64,175], textColor: [255,255,255], fontStyle: "bold" },
+        alternateRowStyles: { fillColor: [245,247,250] },
         margin: { left: margin, right: margin },
-        didDrawPage: function (data) {
-          // Rodapé em todas as páginas
+        didDrawPage: function() {
           const pageCount = doc.internal.getNumberOfPages();
           const pageCurrent = doc.internal.getCurrentPageInfo().pageNumber;
-
-          doc.setFontSize(8);
-          doc.setTextColor(120, 120, 120);
-          doc.setFont("helvetica", "normal");
-
-          // Linha do rodapé
-          doc.setDrawColor(220, 220, 220);
-          doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12);
-
-          doc.text("Maps Leads Finder · Open Source", margin, pageHeight - 6);
-          doc.text(`Página ${pageCurrent} de ${pageCount}`, pageWidth - margin, pageHeight - 6, { align: "right" });
+          doc.setFontSize(8); doc.setTextColor(120,120,120);
+          doc.line(margin, pageHeight-12, pageWidth-margin, pageHeight-12);
+          doc.text("Maps Leads Finder", margin, pageHeight-6);
+          doc.text("Página "+pageCurrent+" de "+pageCount, pageWidth-margin, pageHeight-6, { align: "right" });
         }
       });
-
-      // Nome do ficheiro
-      const safeNiche = (lastSearchMeta.niche || "leads").replace(/[^a-z0-9]/gi, "-").toLowerCase().slice(0, 30);
-      const safeLoc = (lastSearchMeta.location || "").replace(/[^a-z0-9]/gi, "-").toLowerCase().slice(0, 20);
-      const filename = `leads-${safeNiche}${safeLoc ? "-" + safeLoc : ""}-${now.toISOString().slice(0, 10)}.pdf`;
-
-      doc.save(filename);
-    }
-
-    function downloadFile(content, filename, type) {
-      const blob = new Blob([content], { type });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      const safe = (lastSearchMeta.niche||"leads").replace(/[^a-z0-9]/gi,"-").toLowerCase().slice(0,30);
+      doc.save("leads-"+safe+"-"+now.toISOString().slice(0,10)+".pdf");
     }
 
     checkApiStatus();
