@@ -10,7 +10,7 @@ Ideal para quem vende websites, serviços digitais ou faz prospeção local.
 
 - Pesquisa empresas no Google Maps por **nicho + localização**
 - Filtra automaticamente apenas as que **não têm website**
-- Exporta resultados em **CSV**, **Excel** e **PDF**
+- Exporta resultados em **CSV**, **Excel** e **PDF profissional**
 - Permite escolher o motor: **Outscraper**, **Apify** ou **Automático**
 
 ---
@@ -20,22 +20,22 @@ Ideal para quem vende websites, serviços digitais ou faz prospeção local.
 | Versão | Estado | Descrição |
 |--------|--------|-----------|
 | **V1** | ✅ | Interface + filtro + exportações (demo) |
-| **V2** | ✅ Pronta | Integração real com Outscraper + Apify |
-| **V3** | Planeada | Login + histórico de pesquisas |
-| **V4** | Planeada | PDF profissional + Google Sheets + templates |
-| **V5** | Planeada | Design final + deploy + polimento |
+| **V2** | ✅ | Integração real com Outscraper + Apify |
+| **V3** | ⏸ Adiada | Login (só quando fizer sentido escalar) |
+| **V4** | ✅ Pronta | PDF profissional (cabeçalho, tabela, rodapé, páginas) |
+| **V5** | Planeada | Deploy + polimento final |
 
 ---
 
-## Como usar a V2 (APIs reais)
+## Como usar
 
-### 1. Clone o repositório
+### 1. Clone
 ```bash
 git clone https://github.com/EdilBorg/maps-leads-finder.git
 cd maps-leads-finder
 ```
 
-### 2. Instala as dependências
+### 2. Instala dependências
 ```bash
 npm install
 ```
@@ -45,66 +45,61 @@ npm install
 cp .env.example .env
 ```
 
-Abre o ficheiro `.env` e coloca as tuas chaves:
+Edita o `.env`:
 
 ```env
 OUTSCRAPER_API_KEY=colocar_API_key_Outscraper_aqui
 APIFY_API_TOKEN=colocar_API_token_Apify_aqui
 ```
 
-**Onde obter as chaves:**
-- Outscraper → https://outscraper.com/ (500 grátis/mês)
-- Apify → https://console.apify.com/account/integrations (~$5 grátis/mês)
+- Outscraper → https://outscraper.com/
+- Apify → https://console.apify.com/account/integrations
 
-> Podes configurar só uma das duas. O modo **Automático** usa a que estiver disponível.
-
-### 4. Arranca o servidor
+### 4. Arranca
 ```bash
 npm start
 ```
 
-Abre no browser: **http://localhost:3000**
+Abre: **http://localhost:3000**
 
 ---
 
-## Estrutura do projeto
+## PDF profissional (V4)
+
+O botão **Exportar PDF** gera um ficheiro A4 horizontal com:
+
+- Cabeçalho azul com título e data
+- Critérios da pesquisa (nicho, localização, motor)
+- Tabela formatada com linhas alternadas
+- Rodapé com número de página
+- Nome de ficheiro automático (`leads-nicho-cidade-data.pdf`)
+
+---
+
+## Estrutura
 
 ```
 maps-leads-finder/
-├── index.html       # Interface (frontend)
-├── server.js        # Backend (Outscraper + Apify)
+├── index.html       # Interface + PDF profissional
+├── server.js        # Backend Outscraper + Apify
 ├── package.json
-├── .env.example     # Modelo das chaves (NUNCA commits o .env real)
+├── .env.example
 ├── .gitignore
 └── README.md
 ```
 
 ---
 
-## Como funciona
-
-1. Escolhes o motor (Outscraper / Apify / Automático)
-2. Preenches nicho + localização
-3. A plataforma pesquisa no Google Maps
-4. Filtra automaticamente só empresas **sem website**
-5. Exportas em CSV, Excel ou PDF
-
----
-
 ## Roadmap
 
-- [x] V1 — Interface + filtro + exportações (demo)
-- [x] V2 — Integração real Outscraper + Apify
-- [ ] V3 — Autenticação e histórico
-- [ ] V4 — Exportações avançadas e templates
-- [ ] V5 — Deploy e polimento final
+- [x] V1 — Interface + demo
+- [x] V2 — APIs reais
+- [ ] V3 — Login (adiada)
+- [x] V4 — PDF profissional
+- [ ] V5 — Deploy + polimento
 
 ---
 
 ## Licença
 
-MIT — Podes usar, modificar e distribuir livremente.
-
----
-
-Feito para quem quer encontrar leads locais de forma rápida e inteligente.
+MIT
