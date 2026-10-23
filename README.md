@@ -19,49 +19,51 @@ Ideal para quem vende websites, serviços digitais ou faz prospeção local.
 
 | Versão | Estado | Descrição |
 |--------|--------|-----------|
-| **V1** | ✅ Pronta | Interface completa + filtro sem website + exportações (dados de demonstração) |
-| **V2** | Em breve | Integração real com Outscraper + Apify |
+| **V1** | ✅ | Interface + filtro + exportações (demo) |
+| **V2** | ✅ Pronta | Integração real com Outscraper + Apify |
 | **V3** | Planeada | Login + histórico de pesquisas |
-| **V4** | Planeada | PDF profissional + Google Sheets + templates de mensagem |
+| **V4** | Planeada | PDF profissional + Google Sheets + templates |
 | **V5** | Planeada | Design final + deploy + polimento |
 
 ---
 
-## Como usar a V1 (agora)
+## Como usar a V2 (APIs reais)
 
-1. Faz clone do repositório:
+### 1. Clone o repositório
 ```bash
 git clone https://github.com/EdilBorg/maps-leads-finder.git
 cd maps-leads-finder
 ```
 
-2. Abre o ficheiro `index.html` no browser (podes usar Live Server ou simplesmente abrir o ficheiro).
+### 2. Instala as dependências
+```bash
+npm install
+```
 
-3. Escolhe o motor, preenche o nicho e a localização, e clica em **Procurar leads**.
-
-> **Nota:** A V1 funciona em modo demo com dados de exemplo. As APIs reais entram na V2.
-
----
-
-## Configurar API Keys (para a V2)
-
-1. Copia o ficheiro de exemplo:
+### 3. Configura as API keys
 ```bash
 cp .env.example .env
 ```
 
-2. Abre o `.env` e coloca as tuas chaves:
+Abre o ficheiro `.env` e coloca as tuas chaves:
 
 ```env
 OUTSCRAPER_API_KEY=colocar_API_key_Outscraper_aqui
 APIFY_API_TOKEN=colocar_API_token_Apify_aqui
 ```
 
-3. Obtém as chaves:
-   - Outscraper → https://outscraper.com/
-   - Apify → https://console.apify.com/account/integrations
+**Onde obter as chaves:**
+- Outscraper → https://outscraper.com/ (500 grátis/mês)
+- Apify → https://console.apify.com/account/integrations (~$5 grátis/mês)
 
-**Importante:** Nunca commits o ficheiro `.env` com chaves reais. Ele já está no `.gitignore`.
+> Podes configurar só uma das duas. O modo **Automático** usa a que estiver disponível.
+
+### 4. Arranca o servidor
+```bash
+npm start
+```
+
+Abre no browser: **http://localhost:3000**
 
 ---
 
@@ -69,19 +71,30 @@ APIFY_API_TOKEN=colocar_API_token_Apify_aqui
 
 ```
 maps-leads-finder/
-├── index.html          # Interface principal (V1)
-├── .env.example        # Modelo de variáveis de ambiente
+├── index.html       # Interface (frontend)
+├── server.js        # Backend (Outscraper + Apify)
+├── package.json
+├── .env.example     # Modelo das chaves (NUNCA commits o .env real)
 ├── .gitignore
-├── README.md
-└── (futuro) backend/   # Lógica de APIs (V2+)
+└── README.md
 ```
+
+---
+
+## Como funciona
+
+1. Escolhes o motor (Outscraper / Apify / Automático)
+2. Preenches nicho + localização
+3. A plataforma pesquisa no Google Maps
+4. Filtra automaticamente só empresas **sem website**
+5. Exportas em CSV, Excel ou PDF
 
 ---
 
 ## Roadmap
 
 - [x] V1 — Interface + filtro + exportações (demo)
-- [ ] V2 — Integração real Outscraper + Apify
+- [x] V2 — Integração real Outscraper + Apify
 - [ ] V3 — Autenticação e histórico
 - [ ] V4 — Exportações avançadas e templates
 - [ ] V5 — Deploy e polimento final
