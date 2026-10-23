@@ -27,7 +27,7 @@
       </div>
       <div class="flex items-center gap-3">
         <div id="apiStatus" class="text-xs text-slate-500">A verificar APIs...</div>
-        <div class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">V5.3</div>
+        <div class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">V5.4</div>
       </div>
     </div>
   </header>
@@ -110,6 +110,15 @@
       <div id="errorHint" class="mt-2 text-red-300/80 text-xs hidden"></div>
     </div>
 
+    <section id="historySection" class="mb-8 hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-medium text-slate-400 uppercase tracking-wider">Histórico local</h2>
+        <button type="button" onclick="clearHistory()" class="text-xs text-slate-500 hover:text-red-400">Limpar tudo</button>
+      </div>
+      <div id="historyList" class="flex flex-wrap gap-2"></div>
+      <p class="text-xs text-slate-600 mt-2">Só neste browser · reabrir não gasta quota</p>
+    </section>
+
     <section id="resultsSection" class="hidden">
       <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div>
@@ -145,12 +154,14 @@
     </div>
   </main>
 
-  <footer class="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-500">Maps Leads Finder V5.3 · Open Source</footer>
+  <footer class="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-500">Maps Leads Finder V5.4 · Open Source</footer>
 
   <script>
     let selectedMotor = "outscraper";
     let currentResults = [];
     let lastSearchMeta = { niche: "", location: "", motor: "" };
+    window.currentResults = currentResults;
+    window.lastSearchMeta = lastSearchMeta;
 
     async function checkApiStatus() {
       try {
@@ -202,6 +213,9 @@
         }
         currentResults = data.results || [];
         lastSearchMeta = { niche, location, motor: data.motor || selectedMotor };
+        window.currentResults = currentResults;
+        window.lastSearchMeta = lastSearchMeta;
+        if (typeof saveHistoryItem === "function") saveHistoryItem(lastSearchMeta, currentResults);
         renderResults(currentResults, niche, location, data.motor);
         document.getElementById("resultsSection").classList.remove("hidden");
       } catch (err) {
@@ -218,7 +232,7 @@
       }
     }
 
-    function renderResults(results, niche, location, motorUsed) {
+    window.renderResults = function renderResults(results, niche, location, motorUsed) {
       const tbody = document.getElementById("resultsBody");
       tbody.innerHTML = "";
       document.getElementById("resultsCount").textContent =
@@ -247,14 +261,14 @@
           '</div></td>';
         tbody.appendChild(tr);
       });
-    }
+    };
 
-    function escapeHtml(text) {
+    window.escapeHtml = function escapeHtml(text) {
       if (!text) return "";
       const d = document.createElement("div");
       d.textContent = text;
       return d.innerHTML;
-    }
+    };
 
     function copyPhone(phone) {
       if (!phone) return;
@@ -337,5 +351,6 @@
 
     checkApiStatus();
   </script>
+  <script src="history.js"></script>
 </body>
 </html>
