@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment variables (NUNCA commits chaves reais)
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
