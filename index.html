@@ -27,7 +27,7 @@
       </div>
       <div class="flex items-center gap-3">
         <div id="apiStatus" class="text-xs text-slate-500">A verificar APIs...</div>
-        <div class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">V5.2</div>
+        <div class="text-xs bg-blue-900/50 text-blue-300 px-2 py-1 rounded-full">V5.3</div>
       </div>
     </div>
   </header>
@@ -105,7 +105,9 @@
       <p id="loadingText" class="text-slate-400">A procurar...</p>
     </div>
     <div id="errorState" class="hidden bg-red-950/40 border border-red-800/50 rounded-xl p-4 text-sm text-red-200 mb-6">
-      <strong>Erro:</strong> <span id="errorMessage"></span>
+      <div class="font-semibold mb-1">Não foi possível concluir a pesquisa</div>
+      <div id="errorMessage"></div>
+      <div id="errorHint" class="mt-2 text-red-300/80 text-xs hidden"></div>
     </div>
 
     <section id="resultsSection" class="hidden">
@@ -143,7 +145,7 @@
     </div>
   </main>
 
-  <footer class="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-500">Maps Leads Finder V5.2 · Open Source</footer>
+  <footer class="border-t border-slate-800 mt-16 py-6 text-center text-xs text-slate-500">Maps Leads Finder V5.3 · Open Source</footer>
 
   <script>
     let selectedMotor = "outscraper";
@@ -155,12 +157,13 @@
         const res = await fetch("/api/status");
         const data = await res.json();
         const el = document.getElementById("apiStatus");
-        if (data.outscraper && data.apify) el.innerHTML = '<span class="text-green-400">Outscraper + Apify ✅</span>';
-        else if (data.outscraper) el.innerHTML = '<span class="text-green-400">Outscraper ✅</span>';
-        else if (data.apify) el.innerHTML = '<span class="text-green-400">Apify ✅</span>';
-        else el.innerHTML = '<span class="text-amber-400">APIs não configuradas</span>';
+        const tip = data.message || "";
+        if (data.outscraper && data.apify) el.innerHTML = '<span class="text-green-400" title="'+tip+'">Outscraper + Apify ✅</span>';
+        else if (data.outscraper) el.innerHTML = '<span class="text-green-400" title="'+tip+'">Outscraper ✅</span>';
+        else if (data.apify) el.innerHTML = '<span class="text-green-400" title="'+tip+'">Apify ✅</span>';
+        else el.innerHTML = '<span class="text-amber-400" title="'+tip+'">Configura as keys no .env</span>';
       } catch (e) {
-        document.getElementById("apiStatus").innerHTML = '<span class="text-amber-400">Backend offline</span>';
+        document.getElementById("apiStatus").innerHTML = '<span class="text-amber-400">Backend offline — corre npm start</span>';
       }
     }
 
@@ -192,14 +195,23 @@
           })
         });
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || "Erro");
+        if (!res.ok || !data.success) {
+          const e = new Error(data.error || "Erro na pesquisa");
+          e.hint = data.hint || null;
+          throw e;
+        }
         currentResults = data.results || [];
         lastSearchMeta = { niche, location, motor: data.motor || selectedMotor };
         renderResults(currentResults, niche, location, data.motor);
         document.getElementById("resultsSection").classList.remove("hidden");
       } catch (err) {
         document.getElementById("errorState").classList.remove("hidden");
-        document.getElementById("errorMessage").textContent = err.message;
+        document.getElementById("errorMessage").textContent = err.message || "Erro desconhecido";
+        const hintEl = document.getElementById("errorHint");
+        if (hintEl) {
+          if (err.hint) { hintEl.textContent = "→ " + err.hint; hintEl.classList.remove("hidden"); }
+          else { hintEl.textContent = ""; hintEl.classList.add("hidden"); }
+        }
       } finally {
         document.getElementById("loadingState").classList.add("hidden");
         document.getElementById("searchBtn").disabled = false;
@@ -212,7 +224,7 @@
       document.getElementById("resultsCount").textContent =
         results.length + " empresas (melhor qualidade primeiro) · " + niche + (location ? " em " + location : "") + " · " + (motorUsed || selectedMotor);
       if (!results.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Nenhum resultado.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Nenhum resultado com estes filtros. Baixa a nota/reviews mínimas ou alarga a zona.</td></tr>';
         return;
       }
       results.forEach(r => {
