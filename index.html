@@ -23,26 +23,26 @@
         </div>
       </div>
       <div class="top-meta">
-        <div id="apiStatus" class="status-pill">A verificar APIs…</div>
+        <div id="apiStatus" class="status-pill">A verificar…</div>
         <span class="ver-badge">v6</span>
       </div>
     </div>
   </header>
 
   <main class="wrap">
-    <p class="section-label">Fornecedor de dados</p>
-    <div class="motor-grid" role="group" aria-label="Motor de pesquisa">
-      <button type="button" class="motor-card selected" data-motor="outscraper" onclick="selectMotor(this)">
-        <div class="motor-card-top"><strong>Outscraper</strong><span class="chip">500 grátis/mês</span></div>
-        <p>Rápido. Ideal para buscas pequenas.</p>
+    <p class="section-label">Modo de pesquisa</p>
+    <div class="motor-grid" role="group" aria-label="Modo de pesquisa">
+      <button type="button" class="motor-card" data-motor="outscraper" onclick="selectMotor(this)">
+        <div class="motor-card-top"><strong>Rápida</strong><span class="chip">Buscas curtas</span></div>
+        <p>Ideal para uma cidade ou zona pequena.</p>
       </button>
       <button type="button" class="motor-card" data-motor="apify" onclick="selectMotor(this)">
-        <div class="motor-card-top"><strong>Apify</strong><span class="chip">~1.200 grátis/mês</span></div>
-        <p>Mais volume. Várias cidades.</p>
+        <div class="motor-card-top"><strong>Completa</strong><span class="chip">Mais volume</span></div>
+        <p>Melhor para várias zonas ou mais resultados.</p>
       </button>
-      <button type="button" class="motor-card" data-motor="auto" onclick="selectMotor(this)">
-        <div class="motor-card-top"><strong>Automático</strong><span class="chip rec">Recomendado</span></div>
-        <p>Usa o motor disponível.</p>
+      <button type="button" class="motor-card selected" data-motor="auto" onclick="selectMotor(this)">
+        <div class="motor-card-top"><strong>Automática</strong><span class="chip rec">Recomendado</span></div>
+        <p>Escolhe o melhor modo disponível.</p>
       </button>
     </div>
 
@@ -71,17 +71,6 @@
         </div>
       </div>
       <button type="button" id="searchBtn" class="btn-primary" onclick="startSearch()">Procurar leads</button>
-    </section>
-
-    <section class="panel" id="templateSection">
-      <div class="history-head">
-        <h2 class="panel-title" style="margin:0">Template de mensagem</h2>
-        <button type="button" class="link-muted" onclick="resetTemplate()">Repor padrão</button>
-      </div>
-      <div class="field" style="margin-top:12px">
-        <textarea id="msgTemplate" class="ctrl" rows="3" placeholder="Olá {nome}…"></textarea>
-      </div>
-      <p class="hint-micro">Variáveis: {nome} · {cidade} · {nicho} · {morada} — Msg copia · WA+ abre WhatsApp</p>
     </section>
 
     <div id="loadingState" class="state-box">
@@ -125,16 +114,12 @@
         </table>
       </div></div>
     </section>
-
-    <div class="setup-note">
-      <strong>API keys:</strong> copia <code>.env.example</code> → <code>.env</code>, preenche as chaves, <code>npm install && npm start</code>
-    </div>
   </main>
 
-  <footer class="app-foot">Maps Leads Finder · Open source · DESIGN.md</footer>
+  <footer class="app-foot">Maps Leads Finder</footer>
 
   <script>
-    let selectedMotor = "outscraper";
+    let selectedMotor = "auto";
     let currentResults = [];
     let lastSearchMeta = { niche: "", location: "", motor: "" };
     window.currentResults = currentResults;
@@ -145,13 +130,15 @@
         const res = await fetch("/api/status");
         const data = await res.json();
         const el = document.getElementById("apiStatus");
-        const tip = data.message || "";
-        if (data.outscraper && data.apify) { el.innerHTML = '<span class="ok">Outscraper + Apify</span>'; el.title = tip; }
-        else if (data.outscraper) { el.innerHTML = '<span class="ok">Outscraper</span>'; el.title = tip; }
-        else if (data.apify) { el.innerHTML = '<span class="ok">Apify</span>'; el.title = tip; }
-        else { el.innerHTML = '<span class="warn">Configura as keys no .env</span>'; el.title = tip; }
+        if (data.ready) {
+          el.innerHTML = '<span class="ok">Serviço ativo</span>';
+          el.title = "";
+        } else {
+          el.innerHTML = '<span class="warn">Serviço indisponível</span>';
+          el.title = "";
+        }
       } catch (e) {
-        document.getElementById("apiStatus").innerHTML = '<span class="warn">Backend offline</span>';
+        document.getElementById("apiStatus").innerHTML = '<span class="warn">Serviço indisponível</span>';
       }
     }
 
@@ -169,7 +156,7 @@
       document.getElementById("resultsSection").classList.add("hidden");
       document.getElementById("errorState").classList.remove("show");
       document.getElementById("searchBtn").disabled = true;
-      document.getElementById("loadingText").textContent = selectedMotor === "apify" ? "Apify a processar (30–90s)…" : "A procurar empresas…";
+      document.getElementById("loadingText").textContent = selectedMotor === "apify" ? "A procurar (pode demorar cerca de 1 minuto)…" : "A procurar empresas…";
       try {
         const res = await fetch("/api/search", {
           method: "POST",
@@ -184,7 +171,7 @@
         });
         const data = await res.json();
         if (!res.ok || !data.success) {
-          const e = new Error(data.error || "Erro na pesquisa");
+          const e = new Error(data.error || "Não foi possível concluir a pesquisa. Tenta novamente.");
           e.hint = data.hint || null;
           throw e;
         }
@@ -197,10 +184,10 @@
         document.getElementById("resultsSection").classList.remove("hidden");
       } catch (err) {
         document.getElementById("errorState").classList.add("show");
-        document.getElementById("errorMessage").textContent = err.message || "Erro desconhecido";
+        document.getElementById("errorMessage").textContent = err.message || "Não foi possível concluir a pesquisa. Tenta novamente.";
         const hintEl = document.getElementById("errorHint");
         if (hintEl) {
-          if (err.hint) { hintEl.textContent = "→ " + err.hint; hintEl.classList.remove("hidden"); }
+          if (err.hint) { hintEl.textContent = err.hint; hintEl.classList.remove("hidden"); }
           else { hintEl.textContent = ""; hintEl.classList.add("hidden"); }
         }
       } finally {
@@ -213,8 +200,8 @@
       const tbody = document.getElementById("resultsBody");
       tbody.innerHTML = "";
       document.getElementById("resultsCount").textContent =
-        results.length + " empresas · qualidade primeiro · " + niche +
-        (location ? " em " + location : "") + " · " + (motorUsed || selectedMotor);
+        results.length + " empresas · " + niche +
+        (location ? " em " + location : "");
       if (!results.length) {
         tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhum resultado com estes filtros. Reduz nota/reviews mínimas ou alarga a zona.</td></tr>';
         return;
@@ -263,9 +250,9 @@
       if (!currentResults.length) return alert("Sem resultados");
       const headers = ["Empresa","Telefone","Morada","Avaliação","Reviews","Website","Cidade"];
       const rows = currentResults.map(r => [r.name,r.phone,r.address,r.rating,r.reviews,r.website||"Sem website",r.city]);
-      const csv = [headers,...rows].map(row => row.map(c => '"'+String(c??"").replace(/"/g,'""')+'"').join(","));
+      const csv = [headers,...rows].map(row => row.map(c => '"'+String(c??"").replace(/"/g,'""')+'"').join(",")).join("\n");
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv.join("\n")],{type:"text/csv;charset=utf-8"}));
+      a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
       a.download = "leads-sem-website.csv"; a.click();
     }
 
@@ -302,7 +289,8 @@
       y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
       doc.text("Nicho: " + (lastSearchMeta.niche || "—"), margin, y);
       doc.text("Local: " + (lastSearchMeta.location || "—"), margin + 80, y);
-      doc.text("Motor: " + (lastSearchMeta.motor || "—"), margin + 160, y);
+      const modeTxt = lastSearchMeta.motor === "apify" ? "Completa" : lastSearchMeta.motor === "outscraper" ? "Rápida" : "Automática";
+      doc.text("Modo: " + modeTxt, margin + 160, y);
       y += 5; doc.setDrawColor(200, 200, 200); doc.line(margin, y, pageWidth - margin, y);
       const tableData = currentResults.map((r, i) => [String(i + 1), r.name || "—", r.phone || "—", r.address || "—", r.rating ? r.rating + " (" + (r.reviews || 0) + ")" : "—", r.city || "—", r.website ? "Tem site" : "Sem website"]);
       doc.autoTable({
