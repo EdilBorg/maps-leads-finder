@@ -1,6 +1,5 @@
 /**
  * Maps Leads Finder - Backend
- * V5.3: erros claros + estado das APIs
  */
 
 require("dotenv").config();
@@ -26,65 +25,66 @@ function hasApify() {
   return !!(APIFY_API_TOKEN && !APIFY_API_TOKEN.includes("colocar_"));
 }
 
-/** V5.3: traduz erros técnicos em mensagens úteis */
+/** Mensagens seguras para o cliente (detalhe só no log do servidor) */
 function friendlyError(err, motor) {
   const raw = (err && err.message) ? String(err.message) : String(err);
   const lower = raw.toLowerCase();
 
+  console.error("[search error]", motor || "-", raw.slice(0, 500));
+
   if (lower.includes("não configurada") || lower.includes("não configurado") || lower.includes("colocar_")) {
     return {
       code: "NO_API_KEY",
-      error: "Falta a chave de API. Abre o ficheiro .env e preenche OUTSCRAPER_API_KEY e/ou APIFY_API_TOKEN (vê .env.example).",
-      hint: "cp .env.example .env  e  edita as chaves"
+      error: "O serviço de pesquisa não está disponível de momento. Tenta novamente mais tarde.",
+      hint: null
     };
   }
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("invalid api") || lower.includes("authentication")) {
     return {
       code: "INVALID_KEY",
-      error: "Chave de API inválida ou expirada (" + (motor || "API") + "). Verifica a key no .env.",
-      hint: "Outscraper: outscraper.com | Apify: console.apify.com/account/integrations"
+      error: "Não foi possível autenticar o serviço de pesquisa. Tenta novamente mais tarde.",
+      hint: null
     };
   }
   if (lower.includes("402") || lower.includes("payment") || lower.includes("quota") || lower.includes("limit exceeded") || lower.includes("insufficient")) {
     return {
       code: "QUOTA",
-      error: "Quota grátis esgotada ou saldo em falta neste motor. Tenta o outro motor (Outscraper ↔ Apify) ou espera o reset mensal.",
-      hint: "No modo Automático a ferramenta tenta o motor alternativo quando um falha."
+      error: "O limite de pesquisas foi atingido. Tenta novamente mais tarde ou reduz o número de resultados.",
+      hint: null
     };
   }
   if (lower.includes("429") || lower.includes("rate limit") || lower.includes("too many")) {
     return {
       code: "RATE_LIMIT",
-      error: "Demasiados pedidos em pouco tempo. Espera 1–2 minutos e tenta de novo.",
+      error: "Demasiados pedidos em pouco tempo. Espera um minuto e tenta de novo.",
       hint: null
     };
   }
   if (lower.includes("timeout") || lower.includes("aborted") || lower.includes("timed out")) {
     return {
       code: "TIMEOUT",
-      error: "A pesquisa demorou demasiado (comum no Apify em zonas grandes). Reduz o máx. de resultados ou escolhe uma cidade mais pequena.",
+      error: "A pesquisa demorou demasiado. Reduz o máximo de resultados ou escolhe uma zona mais pequena.",
+      hint: null
+    };
+  }
+  if (lower.includes("network") || lower.includes("fetch failed") || lower.includes("econnrefused") || lower.includes("enotfound")) {
+    return {
+      code: "NETWORK",
+      error: "Não foi possível ligar ao serviço de pesquisa. Verifica a ligação e tenta de novo.",
       hint: null
     };
   }
   if (lower.includes("status: failed") || lower.includes("terminou com status")) {
     return {
       code: "RUN_FAILED",
-      error: "O motor não conseguiu concluir a pesquisa. Tenta de novo ou muda para o outro motor.",
-      hint: raw
-    };
-  }
-  if (lower.includes("fetch failed") || lower.includes("econnrefused") || lower.includes("network") || lower.includes("enotfound")) {
-    return {
-      code: "NETWORK",
-      error: "Sem ligação à internet ou o serviço da API está indisponível. Verifica a rede e tenta outra vez.",
+      error: "Não foi possível concluir a pesquisa. Tenta novamente.",
       hint: null
     };
   }
-
   return {
     code: "UNKNOWN",
-    error: raw.length > 300 ? raw.slice(0, 300) + "…" : raw,
-    hint: "Se o problema continuar, troca de motor ou reduz o número de resultados."
+    error: "Não foi possível concluir a pesquisa. Tenta novamente.",
+    hint: null
   };
 }
 
@@ -139,7 +139,7 @@ async function searchApify(query, location, limit = 50) {
       body: JSON.stringify({
         searchStringsArray: [searchString],
         maxCrawledPlacesPerSearch: limit,
-        language: "pt",
+        language: "pt-PT",
         deeperCityScrape: false,
         skipClosedPlaces: true
       })
@@ -283,8 +283,8 @@ app.post("/api/search", async (req, res) => {
           return res.status(400).json({
             success: false,
             code: "NO_API_KEY",
-            error: "Nenhuma API configurada. Preenche OUTSCRAPER_API_KEY ou APIFY_API_TOKEN no ficheiro .env.",
-            hint: "cp .env.example .env"
+            error: "O serviço de pesquisa não está disponível de momento. Tenta novamente mais tarde.",
+            hint: null
           });
         }
       } catch (err) {
@@ -332,13 +332,7 @@ app.get("/api/status", (req, res) => {
     apify: apify,
     ready: out || apify,
     version: "5.3.0",
-    message: !out && !apify
-      ? "Nenhuma key no .env — configura OUTSCRAPER_API_KEY ou APIFY_API_TOKEN"
-      : out && apify
-        ? "Outscraper e Apify prontos"
-        : out
-          ? "Só Outscraper configurado"
-          : "Só Apify configurado"
+    message: (out || apify) ? "ready" : "unavailable"
   });
 });
 
@@ -347,7 +341,7 @@ app.get("*", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 Maps Leads Finder V5.3 em http://localhost:${PORT}`);
-  console.log(`   Outscraper: ${hasOutscraper() ? "✅" : "❌"}`);
-  console.log(`   Apify:      ${hasApify() ? "✅" : "❌"}\n`);
+  console.log(`\nMaps Leads Finder em http://localhost:${PORT}`);
+  console.log(`   Outscraper: ${hasOutscraper() ? "ok" : "off"}`);
+  console.log(`   Apify:      ${hasApify() ? "ok" : "off"}\n`);
 });
