@@ -6,7 +6,7 @@
   <title>Maps Leads Finder</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -24,7 +24,7 @@
       </div>
       <div class="top-meta">
         <div id="apiStatus" class="status-pill">A verificar APIs…</div>
-        <span class="ver-badge">UI redesign</span>
+        <span class="ver-badge">v6</span>
       </div>
     </div>
   </header>
@@ -263,9 +263,9 @@
       if (!currentResults.length) return alert("Sem resultados");
       const headers = ["Empresa","Telefone","Morada","Avaliação","Reviews","Website","Cidade"];
       const rows = currentResults.map(r => [r.name,r.phone,r.address,r.rating,r.reviews,r.website||"Sem website",r.city]);
-      const csv = [headers,...rows].map(row => row.map(c => '"'+String(c??"").replace(/"/g,'""')+'"').join(",")).join("\n");
+      const csv = [headers,...rows].map(row => row.map(c => '"'+String(c??"").replace(/"/g,'""')+'"').join(","));
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
+      a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv.join("\n")],{type:"text/csv;charset=utf-8"}));
       a.download = "leads-sem-website.csv"; a.click();
     }
 
