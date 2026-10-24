@@ -30,20 +30,33 @@
     const section = document.getElementById("historySection");
     const box = document.getElementById("historyList");
     if (!section || !box) return;
-    if (!list.length) { section.classList.add("hidden"); return; }
+    if (!list.length) {
+      section.classList.add("hidden");
+      return;
+    }
     section.classList.remove("hidden");
-    const esc = (typeof window.escapeHtml === "function") ? window.escapeHtml : function (t) {
-      if (!t) return "";
-      const d = document.createElement("div");
-      d.textContent = t;
-      return d.innerHTML;
-    };
+    const esc = (typeof window.escapeHtml === "function")
+      ? window.escapeHtml
+      : function (t) {
+          if (!t) return "";
+          const d = document.createElement("div");
+          d.textContent = t;
+          return d.innerHTML;
+        };
     box.innerHTML = list.map(h => {
       const label = (h.niche || "\u2014") + (h.location ? " \u00b7 " + h.location : "");
-      const when = h.at ? new Date(h.at).toLocaleString("pt-PT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
-      return '<button type="button" data-id="' + h.id + '" onclick="openHistory(this.getAttribute(\'data-id\'))" class="text-left text-xs bg-slate-900 border border-slate-700 hover:border-blue-600 rounded-lg px-3 py-2 max-w-xs">' +
-        '<div class="font-medium text-slate-200 truncate">' + esc(label) + '</div>' +
-        '<div class="text-slate-500">' + h.total + ' leads \u00b7 ' + esc(h.motor || "") + ' \u00b7 ' + when + '</div></button>';
+      const when = h.at
+        ? new Date(h.at).toLocaleString("pt-PT", {
+            day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"
+          })
+        : "";
+      return (
+        '<button type="button" class="history-item" data-id="' + h.id +
+        '" onclick="openHistory(this.getAttribute(\'data-id\'))">' +
+        '<div class="t">' + esc(label) + "</div>" +
+        '<div class="m">' + h.total + " leads \u00b7 " + esc(h.motor || "") + " \u00b7 " + when + "</div>" +
+        "</button>"
+      );
     }).join("");
   };
 
@@ -51,13 +64,17 @@
     const item = window.loadHistory().find(h => h.id === id);
     if (!item) return;
     window.currentResults = item.results || [];
-    window.lastSearchMeta = { niche: item.niche, location: item.location, motor: item.motor };
+    window.lastSearchMeta = {
+      niche: item.niche,
+      location: item.location,
+      motor: item.motor
+    };
     const nicheEl = document.getElementById("niche");
     const locEl = document.getElementById("location");
     if (nicheEl) nicheEl.value = item.niche || "";
     if (locEl) locEl.value = item.location || "";
     const err = document.getElementById("errorState");
-    if (err) err.classList.add("hidden");
+    if (err) err.classList.remove("show");
     if (typeof window.renderResults === "function") {
       window.renderResults(window.currentResults, item.niche, item.location, item.motor);
     }
@@ -65,8 +82,13 @@
     if (rs) rs.classList.remove("hidden");
     const count = document.getElementById("resultsCount");
     if (count) {
-      count.textContent = window.currentResults.length + " empresas (do hist\u00f3rico) \u00b7 " + item.niche +
-        (item.location ? " em " + item.location : "") + " \u00b7 " + (item.motor || "");
+      count.textContent =
+        window.currentResults.length +
+        " empresas (hist\u00f3rico) \u00b7 " +
+        item.niche +
+        (item.location ? " em " + item.location : "") +
+        " \u00b7 " +
+        (item.motor || "");
     }
   };
 
@@ -77,8 +99,12 @@
   };
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () { window.renderHistory(); });
+    document.addEventListener("DOMContentLoaded", function () {
+      window.renderHistory();
+    });
   } else {
-    setTimeout(function () { window.renderHistory(); }, 0);
+    setTimeout(function () {
+      window.renderHistory();
+    }, 0);
   }
 })();
