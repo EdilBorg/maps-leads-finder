@@ -156,7 +156,10 @@
       document.getElementById("resultsSection").classList.add("hidden");
       document.getElementById("errorState").classList.remove("show");
       document.getElementById("searchBtn").disabled = true;
-      document.getElementById("loadingText").textContent = selectedMotor === "apify" ? "A procurar (pode demorar cerca de 1 minuto)…" : "A procurar empresas…";
+      document.getElementById("loadingText").textContent =
+        selectedMotor === "apify" ? "A procurar (pode demorar cerca de 1 minuto)…" :
+        selectedMotor === "auto" ? "A procurar em OpenStreetMap e Apify…" :
+        "A procurar empresas…";
       try {
         const res = await fetch("/api/search", {
           method: "POST",
@@ -182,6 +185,13 @@
         if (typeof saveHistoryItem === "function") saveHistoryItem(lastSearchMeta, currentResults);
         renderResults(currentResults, niche, location, data.motor);
         document.getElementById("resultsSection").classList.remove("hidden");
+        if (data.partial) {
+          document.getElementById("errorState").classList.add("show");
+          document.getElementById("errorMessage").textContent =
+            data.message || "Pesquisa parcial: uma das fontes falhou; a mostrar resultados disponíveis.";
+          const hintEl = document.getElementById("errorHint");
+          if (hintEl) { hintEl.textContent = ""; hintEl.classList.add("hidden"); }
+        }
       } catch (err) {
         document.getElementById("errorState").classList.add("show");
         document.getElementById("errorMessage").textContent = err.message || "Não foi possível concluir a pesquisa. Tenta novamente.";
@@ -199,9 +209,13 @@
     window.renderResults = function renderResults(results, niche, location, motorUsed) {
       const tbody = document.getElementById("resultsBody");
       tbody.innerHTML = "";
+      const motorLabel = motorUsed === "apify" ? "Completa" :
+        (motorUsed === "openstreetmap" || motorUsed === "osm") ? "Rápida" :
+        motorUsed === "combined" ? "Automática (combinada)" : "";
       document.getElementById("resultsCount").textContent =
         results.length + " empresas · " + niche +
-        (location ? " em " + location : "");
+        (location ? " em " + location : "") +
+        (motorLabel ? " · " + motorLabel : "");
       if (!results.length) {
         tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhum resultado com estes filtros. Reduz nota/reviews mínimas ou alarga a zona.</td></tr>';
         return;
@@ -212,10 +226,10 @@
         const waNum = phoneClean.replace(/^\+/, "").replace(/^00/, "");
         const mapsQ = encodeURIComponent([r.name, r.address, r.city].filter(Boolean).join(", "));
         tr.innerHTML =
-          '<td class="name-cell">' + escapeHtml(r.name) + '</td>' +
+          '<td class="name-cell">' + escapeHtml(r.name) + sourceBadge(r) + '</td>' +
           '<td>' + (escapeHtml(r.phone) || '<span class="empty">—</span>') + '</td>' +
           '<td class="muted">' + (escapeHtml(r.address) || '<span class="empty">—</span>') + '</td>' +
-          '<td class="rating">' + (r.rating ? (r.rating + ' <span>(' + (r.reviews || 0) + ')</span>') : '<span class="empty">—</span>') + '</td>' +
+          '<td class="rating">' + (r.rating != null ? (r.rating + ' <span>(' + (r.reviews != null ? r.reviews : 0) + ')</span>') : '<span class="empty">—</span>') + '</td>' +
           '<td>' + (r.website ? '<a href="' + escapeHtml(r.website) + '" target="_blank" rel="noopener">Site</a>' : '<span class="tag-ok">Sem site registado</span>') + '</td>' +
           '<td class="muted">' + (escapeHtml(r.city) || '<span class="empty">—</span>') + '</td>' +
           '<td><div class="actions">' +
@@ -227,6 +241,17 @@
         tbody.appendChild(tr);
       });
     };
+
+    function sourceBadge(r) {
+      const srcs = (r.sources && r.sources.length) ? r.sources : (r.source ? [r.source] : []);
+      if (!srcs.length) return "";
+      const label = srcs.map(s => {
+        if (s === "apify") return "Apify";
+        if (s === "openstreetmap" || s === "osm") return "OSM";
+        return s;
+      }).join("+");
+      return ' <span class="chip" title="Fonte">' + label + '</span>';
+    }
 
     window.escapeHtml = function escapeHtml(text) {
       if (!text) return "";
@@ -248,8 +273,12 @@
 
     function exportCSV() {
       if (!currentResults.length) return alert("Sem resultados");
-      const headers = ["Empresa","Telefone","Morada","Avaliação","Reviews","Website","Cidade"];
-      const rows = currentResults.map(r => [r.name,r.phone,r.address,r.rating,r.reviews,r.website||"Sem site registado",r.city]);
+      const headers = ["Empresa","Telefone","Morada","Avaliação","Reviews","Website","Cidade","Fonte"];
+      const rows = currentResults.map(r => [
+        r.name, r.phone, r.address, r.rating, r.reviews,
+        r.website || "Sem site registado", r.city,
+        (r.sources && r.sources.length) ? r.sources.join("+") : (r.source || "")
+      ]);
       const csv = [headers,...rows].map(row => row.map(c => '"'+String(c??"").replace(/"/g,'""')+'"').join(",")).join("\n");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
@@ -258,7 +287,12 @@
 
     function exportExcel() {
       if (!currentResults.length) return alert("Sem resultados");
-      const data = currentResults.map(r => ({Empresa:r.name,Telefone:r.phone,Morada:r.address,"Avaliação":r.rating,Reviews:r.reviews,Website:r.website||"Sem site registado",Cidade:r.city}));
+      const data = currentResults.map(r => ({
+        Empresa: r.name, Telefone: r.phone, Morada: r.address,
+        "Avaliação": r.rating, Reviews: r.reviews,
+        Website: r.website || "Sem site registado", Cidade: r.city,
+        Fonte: (r.sources && r.sources.length) ? r.sources.join("+") : (r.source || "")
+      }));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Leads");
@@ -289,10 +323,12 @@
       y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
       doc.text("Nicho: " + (lastSearchMeta.niche || "—"), margin, y);
       doc.text("Local: " + (lastSearchMeta.location || "—"), margin + 80, y);
-      const modeTxt = lastSearchMeta.motor === "apify" ? "Completa" : (lastSearchMeta.motor === "osm" || lastSearchMeta.motor === "outscraper") ? "Rápida" : "Automática";
+      const modeTxt = lastSearchMeta.motor === "apify" ? "Completa" :
+        (lastSearchMeta.motor === "osm" || lastSearchMeta.motor === "openstreetmap" || lastSearchMeta.motor === "outscraper") ? "Rápida" :
+        "Automática";
       doc.text("Modo: " + modeTxt, margin + 160, y);
       y += 5; doc.setDrawColor(200, 200, 200); doc.line(margin, y, pageWidth - margin, y);
-      const tableData = currentResults.map((r, i) => [String(i + 1), r.name || "—", r.phone || "—", r.address || "—", r.rating ? r.rating + " (" + (r.reviews || 0) + ")" : "—", r.city || "—", r.website ? "Tem site" : "Sem site registado"]);
+      const tableData = currentResults.map((r, i) => [String(i + 1), r.name || "—", r.phone || "—", r.address || "—", r.rating != null ? r.rating + " (" + (r.reviews != null ? r.reviews : 0) + ")" : "—", r.city || "—", r.website ? "Tem site" : "Sem site registado"]);
       doc.autoTable({
         startY: y + 4,
         head: [["#", "Empresa", "Telefone", "Morada", "Avaliação", "Cidade", "Website"]],
