@@ -1,10 +1,15 @@
 # Dependencies
 node_modules/
 
-# Environment variables (NUNCA commits chaves reais)
+# Environment / secrets
 .env
 .env.local
 .env.*.local
+.env.production
+
+# Session & OTP stores
+data/
+sessions/
 
 # Logs
 logs
@@ -15,7 +20,7 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Build
+# Build / cache
 dist/
 build/
 .cache/

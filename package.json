@@ -1,17 +1,21 @@
 {
   "name": "maps-leads-finder",
-  "version": "2.0.0",
-  "description": "Encontra empresas no Google Maps sem website - Outscraper + Apify",
+  "version": "6.3.0",
+  "description": "Prospec\u00e7\u00e3o de empresas sem website \u2014 Apify + OpenStreetMap, acesso por OTP",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node tests/auth.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
-    "node-fetch": "^2.7.0"
+    "express-session": "^1.18.0",
+    "node-fetch": "^2.7.0",
+    "nodemailer": "^6.9.14",
+    "session-file-store": "^1.5.0"
   },
   "engines": {
     "node": ">=18"
