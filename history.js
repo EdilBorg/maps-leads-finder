@@ -1,5 +1,11 @@
 (function () {
   const HISTORY_KEY = "maps_leads_history_v1";
+  function modeLabel(m) {
+    if (m === "apify") return "Completa";
+    if (m === "outscraper") return "R\u00e1pida";
+    if (m === "auto") return "Autom\u00e1tica";
+    return m || "";
+  }
   const HISTORY_MAX = 20;
 
   window.loadHistory = function () {
@@ -54,7 +60,7 @@
         '<button type="button" class="history-item" data-id="' + h.id +
         '" onclick="openHistory(this.getAttribute(\'data-id\'))">' +
         '<div class="t">' + esc(label) + "</div>" +
-        '<div class="m">' + h.total + " leads \u00b7 " + esc(h.motor || "") + " \u00b7 " + when + "</div>" +
+        '<div class="m">' + h.total + " leads \u00b7 " + esc(modeLabel(h.motor)) + " \u00b7 " + when + "</div>" +
         "</button>"
       );
     }).join("");
@@ -86,9 +92,7 @@
         window.currentResults.length +
         " empresas (hist\u00f3rico) \u00b7 " +
         item.niche +
-        (item.location ? " em " + item.location : "") +
-        " \u00b7 " +
-        (item.motor || "");
+        (item.location ? " em " + item.location : "");
     }
   };
 

@@ -4,27 +4,12 @@
   var TEMPLATE_KEY = "maps_leads_msg_template";
 
   function getTemplate() {
-    var el = document.getElementById("msgTemplate");
-    if (!el) return DEFAULT_TEMPLATE;
-    return el.value || DEFAULT_TEMPLATE;
+    try {
+      var stored = localStorage.getItem(TEMPLATE_KEY);
+      if (stored && stored.trim()) return stored;
+    } catch (e) {}
+    return DEFAULT_TEMPLATE;
   }
-
-  window.loadTemplate = function () {
-    var el = document.getElementById("msgTemplate");
-    if (!el) return;
-    el.value = localStorage.getItem(TEMPLATE_KEY) || DEFAULT_TEMPLATE;
-    function persist() {
-      localStorage.setItem(TEMPLATE_KEY, el.value);
-    }
-    el.addEventListener("change", persist);
-    el.addEventListener("blur", persist);
-  };
-
-  window.resetTemplate = function () {
-    localStorage.setItem(TEMPLATE_KEY, DEFAULT_TEMPLATE);
-    var el = document.getElementById("msgTemplate");
-    if (el) el.value = DEFAULT_TEMPLATE;
-  };
 
   function fillTemplate(lead) {
     var niche =
@@ -41,8 +26,7 @@
   function toast(msg) {
     var t = document.createElement("div");
     t.textContent = msg;
-    t.className =
-      "fixed bottom-4 right-4 bg-green-700 text-white text-sm px-4 py-2 rounded-lg z-50";
+    t.className = "toast";
     document.body.appendChild(t);
     setTimeout(function () {
       t.remove();
@@ -76,14 +60,4 @@
     var url = "https://wa.me/" + wa + "?text=" + encodeURIComponent(text);
     window.open(url, "_blank", "noopener");
   };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      window.loadTemplate();
-    });
-  } else {
-    setTimeout(function () {
-      window.loadTemplate();
-    }, 0);
-  }
 })();
