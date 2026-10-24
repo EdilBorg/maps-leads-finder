@@ -1,7 +1,7 @@
 /**
  * Maps Leads Finder - Backend
  * Motores: OpenStreetMap (Overpass) + Apify
- * Auto: pesquisa combinada paralela nos dois motores
+ * Auth: OTP email + sessões seguras
  */
 
 require("dotenv").config();
@@ -9,13 +9,81 @@ const express = require("express");
 const cors = require("cors");
 const fetch = require("node-fetch");
 const path = require("path");
+const session = require("express-session");
+const FileStore = require("session-file-store")(session);
+
+const { mountAuthRoutes, requireAuth, requireAuthPage } = require("./lib/auth-routes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isProd = process.env.NODE_ENV === "production";
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname)));
+function validateAuthEnv() {
+  const missing = [];
+  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.includes("colocar_")) {
+    missing.push("SESSION_SECRET");
+  }
+  if (!process.env.AUTH_EMAIL) missing.push("AUTH_EMAIL");
+  if (!process.env.SMTP_USER) missing.push("SMTP_USER");
+  if (!process.env.SMTP_PASS || String(process.env.SMTP_PASS).includes("colocar_")) {
+    missing.push("SMTP_PASS");
+  }
+  return missing;
+}
+
+const authMissing = validateAuthEnv();
+if (authMissing.length) {
+  console.warn("[auth] Variáveis em falta ou placeholder:", authMissing.join(", "));
+  console.warn("[auth] O login OTP não funcionará até configurar o .env");
+}
+
+app.set("trust proxy", 1);
+app.use(cors({ origin: false }));
+app.use(express.json({ limit: "32kb" }));
+
+app.use(
+  session({
+    name: "mlf.sid",
+    secret: process.env.SESSION_SECRET || "dev-only-change-me-not-for-production",
+    resave: false,
+    saveUninitialized: false,
+    store: new FileStore({
+      path: path.join(__dirname, "data", "sessions"),
+      ttl: 60 * 60 * 24 * 7,
+      retries: 1,
+      logFn: function () {}
+    }),
+    cookie: {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? "strict" : "lax",
+      maxAge: 1000 * 60 * 60 * 24 * 7
+    }
+  })
+);
+
+app.use(
+  express.static(path.join(__dirname), {
+    index: false,
+    extensions: ["css", "js", "map", "png", "svg", "ico", "woff2"]
+  })
+);
+
+mountAuthRoutes(app);
+
+app.get("/login", (req, res) => {
+  if (req.session && req.session.authenticated) {
+    return res.redirect("/");
+  }
+  res.sendFile(path.join(__dirname, "login.html"));
+});
+
+app.get("/login.css", (req, res) => {
+  res.sendFile(path.join(__dirname, "login.css"));
+});
+app.get("/login.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "login.js"));
+});
 
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN || "";
 const OVERPASS_URL = process.env.OVERPASS_URL || "";
@@ -40,7 +108,6 @@ function friendlyError(err, motor) {
   const raw = (err && err.message) ? String(err.message) : String(err);
   const lower = raw.toLowerCase();
   console.error("[search error]", motor || "-", raw.slice(0, 500));
-
   if (lower.includes("não configurada") || lower.includes("não configurado") || lower.includes("colocar_")) {
     return { code: "NO_API_KEY", error: "O serviço de pesquisa não está disponível de momento. Tenta novamente mais tarde.", hint: null };
   }
@@ -119,10 +186,7 @@ async function geocodeLocation(location) {
   try {
     const res = await fetch(url, {
       method: "GET",
-      headers: {
-        "User-Agent": "MapsLeadsFinder/1.0 (local research tool)",
-        Accept: "application/json"
-      },
+      headers: { "User-Agent": "MapsLeadsFinder/1.0 (local research tool)", Accept: "application/json" },
       signal: controller.signal
     });
     if (!res.ok) {
@@ -178,16 +242,13 @@ function isOfficialWebsite(value) {
   if (value == null) return false;
   const v = String(value).trim().toLowerCase();
   if (!v || v === "null" || v === "undefined" || v === "-" || v === "n/a" || v === "none") return false;
-  if (/google\.(com|pt).*maps|maps\.google|goo\.gl\/maps|openstreetmap\.org|osm\.org|maps\.app\.goo/i.test(v)) {
-    return false;
-  }
+  if (/google\.(com|pt).*maps|maps\.google|goo\.gl\/maps|openstreetmap\.org|osm\.org|maps\.app\.goo/i.test(v)) return false;
   return true;
 }
 
 function osmWebsiteFromTags(tags) {
   if (!tags) return "";
-  const candidates = [tags.website, tags["contact:website"], tags.url, tags["contact:url"], tags["website:pt"]];
-  for (const c of candidates) {
+  for (const c of [tags.website, tags["contact:website"], tags.url, tags["contact:url"], tags["website:pt"]]) {
     if (isOfficialWebsite(c)) return String(c).trim();
   }
   return "";
@@ -227,34 +288,14 @@ function osmStreet(tags) {
 
 function osmFullAddress(tags) {
   if (!tags) return "";
-  const parts = [
-    osmStreet(tags),
-    tags["addr:postcode"],
-    tags["addr:city"] || tags["addr:place"] || tags["addr:suburb"]
-  ].filter(Boolean);
-  return parts.join(", ");
+  return [osmStreet(tags), tags["addr:postcode"], tags["addr:city"] || tags["addr:place"] || tags["addr:suburb"]].filter(Boolean).join(", ");
 }
 
 function emptyPlace() {
   return {
-    name: "",
-    rating: null,
-    reviews: null,
-    street: "",
-    city: "",
-    state: "",
-    countryCode: "",
-    address: "",
-    website: "",
-    phone: "",
-    email: "",
-    categories: [],
-    openingHours: "",
-    latitude: null,
-    longitude: null,
-    place_id: "",
-    source: "",
-    sources: []
+    name: "", rating: null, reviews: null, street: "", city: "", state: "", countryCode: "",
+    address: "", website: "", phone: "", email: "", categories: [], openingHours: "",
+    latitude: null, longitude: null, place_id: "", source: "", sources: []
   };
 }
 
@@ -269,8 +310,6 @@ function normalizeOsmElement(el) {
   const address = osmFullAddress(tags);
   const place = emptyPlace();
   place.name = name;
-  place.rating = null;
-  place.reviews = null;
   place.street = street;
   place.city = city || extractCity(address);
   place.state = tags["addr:state"] || tags["addr:province"] || "";
@@ -343,9 +382,7 @@ function normalizeApifyPlace(p) {
 }
 
 async function searchOpenStreetMap(niche, location, limit = 50) {
-  if (!niche || !String(niche).trim()) {
-    throw new Error("Nicho em falta para pesquisa OpenStreetMap");
-  }
+  if (!niche || !String(niche).trim()) throw new Error("Nicho em falta para pesquisa OpenStreetMap");
   const bbox = await geocodeLocation(location);
   const query = buildOverpassQuery(niche, bbox, limit);
   const controller = new AbortController();
@@ -399,9 +436,7 @@ async function searchOpenStreetMap(niche, location, limit = 50) {
 }
 
 async function searchApify(query, location, limit = 50) {
-  if (!hasApify()) {
-    throw new Error("APIFY_API_TOKEN não configurado. Coloca o token no ficheiro .env");
-  }
+  if (!hasApify()) throw new Error("APIFY_API_TOKEN não configurado. Coloca o token no ficheiro .env");
   const searchString = location ? `${query} ${location}` : query;
   const startRes = await fetch(
     `https://api.apify.com/v2/acts/compass~crawler-google-places/runs?token=${APIFY_API_TOKEN}`,
@@ -426,17 +461,14 @@ async function searchApify(query, location, limit = 50) {
   const defaultDatasetId = runData.data.defaultDatasetId;
   let status = "RUNNING";
   let attempts = 0;
-  const maxAttempts = 60;
-  while ((status === "RUNNING" || status === "READY") && attempts < maxAttempts) {
+  while ((status === "RUNNING" || status === "READY") && attempts < 60) {
     await sleep(2000);
     const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_TOKEN}`);
     const statusData = await statusRes.json();
     status = statusData.data.status;
     attempts++;
   }
-  if (status !== "SUCCEEDED") {
-    throw new Error(`Apify run terminou com status: ${status}`);
-  }
+  if (status !== "SUCCEEDED") throw new Error(`Apify run terminou com status: ${status}`);
   const datasetRes = await fetch(
     `https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${APIFY_API_TOKEN}&format=json&limit=${limit}`
   );
@@ -461,13 +493,11 @@ function filterQuality(places, minRating, minReviews) {
   const minR = Number(minRating) || 0;
   const minRev = Number(minReviews) || 0;
   if (minR <= 0 && minRev <= 0) return places;
-
   return places.filter(p => {
     const isOsmOnly =
       (p.source === "openstreetmap" || p.source === "osm") &&
       !(p.sources && p.sources.includes("apify"));
     if (isOsmOnly) return true;
-
     if (minR > 0) {
       if (p.rating == null || !Number.isFinite(Number(p.rating))) {
         if (p.source === "apify" && !(p.sources && p.sources.includes("openstreetmap"))) return false;
@@ -500,24 +530,15 @@ function sortByQuality(places) {
 }
 
 function normalizeName(name) {
-  return String(name || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
-
 function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
 }
-
 function pickNonEmpty(a, b) {
   if (a != null && a !== "" && !(Array.isArray(a) && !a.length)) return a;
   return b;
 }
-
 function mergePlaces(a, b) {
   const merged = emptyPlace();
   merged.name = pickNonEmpty(a.name, b.name);
@@ -538,34 +559,25 @@ function mergePlaces(a, b) {
   merged.place_id = pickNonEmpty(a.place_id, b.place_id);
   const sources = [...new Set([...(a.sources || [a.source]), ...(b.sources || [b.source])].filter(Boolean))];
   merged.sources = sources;
-  if (sources.length > 1) merged.source = "combined";
-  else merged.source = sources[0] || a.source || b.source;
+  merged.source = sources.length > 1 ? "combined" : (sources[0] || a.source || b.source);
   return merged;
 }
-
 function isSameBusiness(a, b) {
   const phoneA = normalizePhone(a.phone);
   const phoneB = normalizePhone(b.phone);
   if (phoneA && phoneB && phoneA.length >= 8 && phoneA === phoneB) return true;
-
   const nameA = normalizeName(a.name);
   const nameB = normalizeName(b.name);
   if (!nameA || !nameB || nameA !== nameB) return false;
-
   if (phoneA && phoneB && phoneA.slice(-8) === phoneB.slice(-8)) return true;
-
   const cityA = normalizeName(a.city);
   const cityB = normalizeName(b.city);
   if (cityA && cityB && cityA === cityB) return true;
-
   if (a.latitude != null && b.latitude != null && a.longitude != null && b.longitude != null) {
-    const dLat = Math.abs(a.latitude - b.latitude);
-    const dLon = Math.abs(a.longitude - b.longitude);
-    if (dLat < 0.001 && dLon < 0.001) return true;
+    if (Math.abs(a.latitude - b.latitude) < 0.001 && Math.abs(a.longitude - b.longitude) < 0.001) return true;
   }
   return false;
 }
-
 function dedupeAndMerge(places) {
   const out = [];
   for (const p of places) {
@@ -581,102 +593,66 @@ function dedupeAndMerge(places) {
   }
   return out;
 }
-
 function applyFilters(places, onlyNoWebsite, minRating, minReviews) {
   let list = places;
   if (onlyNoWebsite) list = filterNoWebsite(list);
-  list = filterQuality(list, minRating, minReviews);
-  return list;
+  return filterQuality(list, minRating, minReviews);
 }
 
 async function searchCombined(niche, location, fetchLimit) {
   const errors = {};
   let osmPlaces = [];
   let apifyPlaces = [];
-
   const tasks = [];
   tasks.push(
     searchOpenStreetMap(niche, location, fetchLimit)
       .then(r => { osmPlaces = r; })
-      .catch(e => {
-        console.log("Auto OSM falhou:", e.message);
-        errors.openstreetmap = e.message;
-      })
+      .catch(e => { console.log("Auto OSM falhou:", e.message); errors.openstreetmap = e.message; })
   );
-
   if (hasApify()) {
     tasks.push(
       searchApify(niche, location, fetchLimit)
         .then(r => { apifyPlaces = r; })
-        .catch(e => {
-          console.log("Auto Apify falhou:", e.message);
-          errors.apify = e.message;
-        })
+        .catch(e => { console.log("Auto Apify falhou:", e.message); errors.apify = e.message; })
     );
   } else {
     errors.apify = "APIFY_API_TOKEN não configurado";
   }
-
   await Promise.all(tasks);
-
   const places = [...osmPlaces, ...apifyPlaces];
   const partial = Object.keys(errors).length > 0 && places.length > 0;
-  const bothFailed = places.length === 0 && Object.keys(errors).length > 0;
-
-  if (bothFailed) {
+  if (places.length === 0 && Object.keys(errors).length > 0) {
     throw new Error(
       errors.apify && errors.openstreetmap
         ? "Não foi possível obter resultados de nenhuma fonte."
         : (errors.apify || errors.openstreetmap || "Pesquisa falhou")
     );
   }
-
   let motor = "combined";
   if (osmPlaces.length && !apifyPlaces.length) motor = "openstreetmap";
   else if (apifyPlaces.length && !osmPlaces.length) motor = "apify";
-
-  return {
-    places,
-    motor,
-    partial,
-    errors: Object.keys(errors).length ? errors : null,
-    counts: { openstreetmap: osmPlaces.length, apify: apifyPlaces.length }
-  };
+  return { places, motor, partial, errors: Object.keys(errors).length ? errors : null, counts: { openstreetmap: osmPlaces.length, apify: apifyPlaces.length } };
 }
 
-app.post("/api/search", async (req, res) => {
+app.post("/api/search", requireAuth, async (req, res) => {
   let usedMotor = req.body.motor || "auto";
   try {
     const {
-      niche = "",
-      location = "",
-      motor = "auto",
-      onlyNoWebsite = true,
-      maxResults = 50,
-      minRating = 0,
-      minReviews = 0
+      niche = "", location = "", motor = "auto", onlyNoWebsite = true,
+      maxResults = 50, minRating = 0, minReviews = 0
     } = req.body;
-
     let motorNorm = motor;
     if (motorNorm === "outscraper") motorNorm = "openstreetmap";
     if (motorNorm === "osm") motorNorm = "openstreetmap";
-
     if (!niche.trim()) {
-      return res.status(400).json({
-        success: false,
-        code: "VALIDATION",
-        error: "Escreve o nicho (ex: cabeleireiros, oficinas).",
-        hint: null
-      });
+      return res.status(400).json({ success: false, code: "VALIDATION", error: "Escreve o nicho (ex: cabeleireiros, oficinas).", hint: null });
     }
-
     const fetchLimit = Math.min(Math.max(Number(maxResults) * 2, Number(maxResults)), 200);
     let places = [];
     let partial = false;
     let sourceErrors = null;
     let counts = null;
     usedMotor = motorNorm;
-
     if (motorNorm === "openstreetmap") {
       places = await searchOpenStreetMap(niche, location, fetchLimit);
       usedMotor = "openstreetmap";
@@ -691,64 +667,53 @@ app.post("/api/search", async (req, res) => {
       sourceErrors = result.errors;
       counts = result.counts;
     }
-
     const beforeFilter = places.length;
     places = dedupeAndMerge(places);
     places = applyFilters(places, onlyNoWebsite, Number(minRating) || 0, Number(minReviews) || 0);
     places = sortByQuality(places);
     const afterFilter = places.length;
     places = places.slice(0, Number(maxResults) || 50);
-
     const payload = {
-      success: true,
-      motor: usedMotor,
-      total: places.length,
-      beforeFilter,
-      afterFilter,
-      partial,
-      query: { niche, location, minRating, minReviews, onlyNoWebsite },
-      results: places
+      success: true, motor: usedMotor, total: places.length, beforeFilter, afterFilter, partial,
+      query: { niche, location, minRating, minReviews, onlyNoWebsite }, results: places
     };
     if (sourceErrors) payload.sourceErrors = sourceErrors;
     if (counts) payload.counts = counts;
-    if (partial) {
-      payload.message = "Pesquisa parcial: uma das fontes falhou; a mostrar resultados disponíveis.";
-    }
-
+    if (partial) payload.message = "Pesquisa parcial: uma das fontes falhou; a mostrar resultados disponíveis.";
     res.json(payload);
   } catch (error) {
     console.error("Erro na pesquisa:", error.message);
     const f = friendlyError(error, usedMotor);
-    res.status(500).json({
-      success: false,
-      code: f.code,
-      error: f.error,
-      hint: f.hint,
-      motor: usedMotor
-    });
+    res.status(500).json({ success: false, code: f.code, error: f.error, hint: f.hint, motor: usedMotor });
   }
 });
 
-app.get("/api/status", (req, res) => {
+app.get("/api/status", requireAuth, (req, res) => {
   const osm = hasOsm();
   const apify = hasApify();
   res.json({
-    osm: osm,
-    openstreetmap: osm,
-    apify: apify,
-    outscraper: false,
-    ready: osm || apify,
-    version: "6.2.0",
-    message: "ready"
+    osm, openstreetmap: osm, apify, outscraper: false,
+    ready: osm || apify, version: "6.3.0", message: "ready"
   });
 });
 
-app.get("*", (req, res) => {
+app.get("/", requireAuthPage, (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ success: false, error: "Não encontrado." });
+  }
+  if (req.session && req.session.authenticated) {
+    return res.sendFile(path.join(__dirname, "index.html"));
+  }
+  return res.redirect("/login");
 });
 
 app.listen(PORT, () => {
   console.log(`\nMaps Leads Finder em http://localhost:${PORT}`);
   console.log(`   OpenStreetMap: ok`);
-  console.log(`   Apify:          ${hasApify() ? "ok" : "off"}\n`);
+  console.log(`   Apify:          ${hasApify() ? "ok" : "off"}`);
+  console.log(`   Auth OTP:       ${authMissing.length ? "config em falta" : "pronto"}\n`);
 });
