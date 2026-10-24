@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Acesso privado — Maps Leads Finder</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/login.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-card" role="main">
+      <div class="auth-brand">
+        <div class="auth-mark" aria-hidden="true">M</div>
+        <div>
+          <div class="auth-product">Maps Leads Finder</div>
+          <div class="auth-tag">Prospecção privada</div>
+        </div>
+      </div>
+
+      <h1 class="auth-title">Acesso privado</h1>
+      <p class="auth-lead">
+        Para proteger a ferramenta, enviamos um código de verificação de 6 dígitos
+        para o email autorizado.
+      </p>
+      <p class="auth-email" id="maskedEmail">Email: —</p>
+
+      <div id="alert" class="auth-alert" role="status" aria-live="polite" hidden></div>
+
+      <section id="stepRequest" class="auth-step">
+        <button type="button" id="btnRequest" class="btn-primary">Solicitar código</button>
+        <p class="auth-hint">O código é válido durante 5 minutos e só pode ser usado uma vez.</p>
+      </section>
+
+      <section id="stepVerify" class="auth-step" hidden>
+        <label class="auth-label" for="otpInput">Código de 6 dígitos</label>
+        <input
+          id="otpInput"
+          class="auth-input"
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          maxlength="6"
+          pattern="[0-9]{6}"
+          placeholder="000000"
+          aria-describedby="otpHelp"
+        />
+        <p id="otpHelp" class="auth-hint">
+          Expira em <span id="countdown">5:00</span>
+        </p>
+        <button type="button" id="btnVerify" class="btn-primary">Confirmar código</button>
+        <button type="button" id="btnResend" class="btn-secondary" disabled>Reenviar código</button>
+      </section>
+    </div>
+    <p class="auth-foot">Acesso restrito · sessão protegida</p>
+  </div>
+  <script src="/login.js"></script>
+</body>
+</html>
