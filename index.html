@@ -24,6 +24,7 @@
       </div>
       <div class="top-meta">
         <div id="apiStatus" class="status-pill">A verificar…</div>
+        <button type="button" id="logoutBtn" class="btn-ghost" style="padding:6px 10px;font-size:12px">Sair</button>
         <span class="ver-badge">v6</span>
       </div>
     </div>
@@ -119,6 +120,26 @@
   <footer class="app-foot">Maps Leads Finder</footer>
 
   <script>
+    (async function ensureAuth() {
+      try {
+        const res = await fetch("/api/auth/session", { credentials: "same-origin" });
+        const data = await res.json();
+        if (!data.authenticated) {
+          window.location.replace("/login");
+          return;
+        }
+      } catch (e) {
+        window.location.replace("/login");
+      }
+    })();
+
+    document.getElementById("logoutBtn")?.addEventListener("click", async function () {
+      try {
+        await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+      } catch (_) {}
+      window.location.replace("/login");
+    });
+
     let selectedMotor = "auto";
     let currentResults = [];
     let lastSearchMeta = { niche: "", location: "", motor: "" };
@@ -127,15 +148,13 @@
 
     async function checkApiStatus() {
       try {
-        const res = await fetch("/api/status");
+        const res = await fetch("/api/status", { credentials: "same-origin" });
         const data = await res.json();
         const el = document.getElementById("apiStatus");
         if (data.ready) {
           el.innerHTML = '<span class="ok">Serviço ativo</span>';
-          el.title = "";
         } else {
           el.innerHTML = '<span class="warn">Serviço indisponível</span>';
-          el.title = "";
         }
       } catch (e) {
         document.getElementById("apiStatus").innerHTML = '<span class="warn">Serviço indisponível</span>';
@@ -163,6 +182,7 @@
       try {
         const res = await fetch("/api/search", {
           method: "POST",
+          credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             niche, location, motor: selectedMotor,
@@ -173,6 +193,10 @@
           })
         });
         const data = await res.json();
+        if (res.status === 401) {
+          window.location.replace("/login");
+          return;
+        }
         if (!res.ok || !data.success) {
           const e = new Error(data.error || "Não foi possível concluir a pesquisa. Tenta novamente.");
           e.hint = data.hint || null;
@@ -217,7 +241,7 @@
         (location ? " em " + location : "") +
         (motorLabel ? " · " + motorLabel : "");
       if (!results.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhum resultado com estes filtros. Reduz nota/reviews mínimas ou alarga a zona.</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">Nenhum resultado com estes filtros.</td></tr>';
         return;
       }
       results.forEach(r => {
@@ -321,14 +345,13 @@
       doc.setTextColor(40, 40, 40); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
       doc.text("Critérios", margin, y);
       y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
-      doc.text("Nicho: " + (lastSearchMeta.niche || "—"), margin, y);
-      doc.text("Local: " + (lastSearchMeta.location || "—"), margin + 80, y);
+      doc.text("Nicho: " + (lastSearchMeta.niche || "\u2014"), margin, y);
+      doc.text("Local: " + (lastSearchMeta.location || "\u2014"), margin + 80, y);
       const modeTxt = lastSearchMeta.motor === "apify" ? "Completa" :
-        (lastSearchMeta.motor === "osm" || lastSearchMeta.motor === "openstreetmap" || lastSearchMeta.motor === "outscraper") ? "Rápida" :
-        "Automática";
+        (lastSearchMeta.motor === "osm" || lastSearchMeta.motor === "openstreetmap") ? "Rápida" : "Automática";
       doc.text("Modo: " + modeTxt, margin + 160, y);
       y += 5; doc.setDrawColor(200, 200, 200); doc.line(margin, y, pageWidth - margin, y);
-      const tableData = currentResults.map((r, i) => [String(i + 1), r.name || "—", r.phone || "—", r.address || "—", r.rating != null ? r.rating + " (" + (r.reviews != null ? r.reviews : 0) + ")" : "—", r.city || "—", r.website ? "Tem site" : "Sem site registado"]);
+      const tableData = currentResults.map((r, i) => [String(i + 1), r.name || "\u2014", r.phone || "\u2014", r.address || "\u2014", r.rating != null ? r.rating + " (" + (r.reviews != null ? r.reviews : 0) + ")" : "\u2014", r.city || "\u2014", r.website ? "Tem site" : "Sem site registado"]);
       doc.autoTable({
         startY: y + 4,
         head: [["#", "Empresa", "Telefone", "Morada", "Avaliação", "Cidade", "Website"]],
