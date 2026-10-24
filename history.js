@@ -2,7 +2,7 @@
   const HISTORY_KEY = "maps_leads_history_v1";
   function modeLabel(m) {
     if (m === "apify") return "Completa";
-    if (m === "outscraper") return "R\u00e1pida";
+    if (m === "osm" || m === "outscraper") return "R\u00e1pida";
     if (m === "auto") return "Autom\u00e1tica";
     return m || "";
   }
