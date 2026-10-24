@@ -386,3 +386,340 @@ function normalizeApifyPlace(p) {
   place.sources = ["apify"];
   return place;
 }
+
+async function searchOpenStreetMap(niche, location, limit = 50) {
+  if (!niche || !String(niche).trim()) throw new Error("Nicho em falta para pesquisa OpenStreetMap");
+  const bbox = await geocodeLocation(location);
+  const query = buildOverpassQuery(niche, bbox, limit);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 50000);
+  let lastErr = null;
+  try {
+    for (const endpoint of OVERPASS_ENDPOINTS) {
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+            "User-Agent": "MapsLeadsFinder/1.0"
+          },
+          body: "data=" + encodeURIComponent(query),
+          signal: controller.signal
+        });
+        if (res.status === 429 || res.status === 504 || res.status === 502) {
+          lastErr = new Error(`Overpass rate limit/timeout ${res.status}`);
+          continue;
+        }
+        if (!res.ok) {
+          const text = await res.text();
+          lastErr = new Error(`Overpass erro ${res.status}: ${text.slice(0, 300)}`);
+          continue;
+        }
+        const data = await res.json();
+        const elements = Array.isArray(data.elements) ? data.elements : [];
+        const places = [];
+        const seen = new Set();
+        for (const el of elements) {
+          const p = normalizeOsmElement(el);
+          if (!p) continue;
+          const key = (p.name + "|" + p.address + "|" + p.phone).toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          places.push(p);
+          if (places.length >= limit) break;
+        }
+        return places;
+      } catch (e) {
+        lastErr = e;
+        console.log("Overpass endpoint falhou:", endpoint, e.message);
+      }
+    }
+    throw lastErr || new Error("Overpass indisponível");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function searchApify(query, location, limit = 50) {
+  if (!hasApify()) throw new Error("APIFY_API_TOKEN não configurado. Coloca o token no ficheiro .env");
+  const searchString = location ? `${query} ${location}` : query;
+  const startRes = await fetch(
+    `https://api.apify.com/v2/acts/compass~crawler-google-places/runs?token=${APIFY_API_TOKEN}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        searchStringsArray: [searchString],
+        maxCrawledPlacesPerSearch: limit,
+        language: "pt-PT",
+        deeperCityScrape: false,
+        skipClosedPlaces: true
+      })
+    }
+  );
+  if (!startRes.ok) {
+    const text = await startRes.text();
+    throw new Error(`Apify start erro ${startRes.status}: ${text}`);
+  }
+  const runData = await startRes.json();
+  const runId = runData.data.id;
+  const defaultDatasetId = runData.data.defaultDatasetId;
+  let status = "RUNNING";
+  let attempts = 0;
+  while ((status === "RUNNING" || status === "READY") && attempts < 60) {
+    await sleep(2000);
+    const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_API_TOKEN}`);
+    const statusData = await statusRes.json();
+    status = statusData.data.status;
+    attempts++;
+  }
+  if (status !== "SUCCEEDED") throw new Error(`Apify run terminou com status: ${status}`);
+  const datasetRes = await fetch(
+    `https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${APIFY_API_TOKEN}&format=json&limit=${limit}`
+  );
+  if (!datasetRes.ok) {
+    const text = await datasetRes.text();
+    throw new Error(`Apify dataset erro ${datasetRes.status}: ${text}`);
+  }
+  const raw = await datasetRes.json();
+  const places = [];
+  for (const item of raw) {
+    const p = normalizeApifyPlace(item);
+    if (p) places.push(p);
+  }
+  return places;
+}
+
+function filterNoWebsite(places) {
+  return places.filter(p => !isOfficialWebsite(p.website));
+}
+
+function filterQuality(places, minRating, minReviews) {
+  const minR = Number(minRating) || 0;
+  const minRev = Number(minReviews) || 0;
+  if (minR <= 0 && minRev <= 0) return places;
+  return places.filter(p => {
+    const isOsmOnly =
+      (p.source === "openstreetmap" || p.source === "osm") &&
+      !(p.sources && p.sources.includes("apify"));
+    if (isOsmOnly) return true;
+    if (minR > 0) {
+      if (p.rating == null || !Number.isFinite(Number(p.rating))) {
+        if (p.source === "apify" && !(p.sources && p.sources.includes("openstreetmap"))) return false;
+        return true;
+      }
+      if (Number(p.rating) < minR) return false;
+    }
+    if (minRev > 0) {
+      if (p.reviews == null || !Number.isFinite(Number(p.reviews))) {
+        if (p.source === "apify" && !(p.sources && p.sources.includes("openstreetmap"))) return false;
+        return true;
+      }
+      if (Number(p.reviews) < minRev) return false;
+    }
+    return true;
+  });
+}
+
+function sortByQuality(places) {
+  return [...places].sort((a, b) => {
+    const reviewsA = a.reviews == null ? -1 : Number(a.reviews) || 0;
+    const reviewsB = b.reviews == null ? -1 : Number(b.reviews) || 0;
+    const ratingA = a.rating == null ? -1 : Number(a.rating) || 0;
+    const ratingB = b.rating == null ? -1 : Number(b.rating) || 0;
+    const scoreA = (reviewsA >= 0 ? reviewsA * 10 : 0) + (ratingA >= 0 ? ratingA * 100 : 0);
+    const scoreB = (reviewsB >= 0 ? reviewsB * 10 : 0) + (ratingB >= 0 ? ratingB * 100 : 0);
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    return (a.name || "").localeCompare(b.name || "", "pt");
+  });
+}
+
+function normalizeName(name) {
+  return String(name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+function normalizePhone(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+function pickNonEmpty(a, b) {
+  if (a != null && a !== "" && !(Array.isArray(a) && !a.length)) return a;
+  return b;
+}
+function mergePlaces(a, b) {
+  const merged = emptyPlace();
+  merged.name = pickNonEmpty(a.name, b.name);
+  merged.rating = a.rating != null ? a.rating : b.rating;
+  merged.reviews = a.reviews != null ? a.reviews : b.reviews;
+  merged.street = pickNonEmpty(a.street, b.street);
+  merged.city = pickNonEmpty(a.city, b.city);
+  merged.state = pickNonEmpty(a.state, b.state);
+  merged.countryCode = pickNonEmpty(a.countryCode, b.countryCode);
+  merged.address = pickNonEmpty(a.address, b.address);
+  merged.website = pickNonEmpty(a.website, b.website);
+  merged.phone = pickNonEmpty(a.phone, b.phone);
+  merged.email = pickNonEmpty(a.email, b.email);
+  merged.categories = [...new Set([...(a.categories || []), ...(b.categories || [])])];
+  merged.openingHours = pickNonEmpty(a.openingHours, b.openingHours);
+  merged.latitude = a.latitude != null ? a.latitude : b.latitude;
+  merged.longitude = a.longitude != null ? a.longitude : b.longitude;
+  merged.place_id = pickNonEmpty(a.place_id, b.place_id);
+  const sources = [...new Set([...(a.sources || [a.source]), ...(b.sources || [b.source])].filter(Boolean))];
+  merged.sources = sources;
+  merged.source = sources.length > 1 ? "combined" : (sources[0] || a.source || b.source);
+  return merged;
+}
+function isSameBusiness(a, b) {
+  const phoneA = normalizePhone(a.phone);
+  const phoneB = normalizePhone(b.phone);
+  if (phoneA && phoneB && phoneA.length >= 8 && phoneA === phoneB) return true;
+  const nameA = normalizeName(a.name);
+  const nameB = normalizeName(b.name);
+  if (!nameA || !nameB || nameA !== nameB) return false;
+  if (phoneA && phoneB && phoneA.slice(-8) === phoneB.slice(-8)) return true;
+  const cityA = normalizeName(a.city);
+  const cityB = normalizeName(b.city);
+  if (cityA && cityB && cityA === cityB) return true;
+  if (a.latitude != null && b.latitude != null && a.longitude != null && b.longitude != null) {
+    if (Math.abs(a.latitude - b.latitude) < 0.001 && Math.abs(a.longitude - b.longitude) < 0.001) return true;
+  }
+  return false;
+}
+function dedupeAndMerge(places) {
+  const out = [];
+  for (const p of places) {
+    let merged = false;
+    for (let i = 0; i < out.length; i++) {
+      if (isSameBusiness(out[i], p)) {
+        out[i] = mergePlaces(out[i], p);
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) out.push(p);
+  }
+  return out;
+}
+function applyFilters(places, onlyNoWebsite, minRating, minReviews) {
+  let list = places;
+  if (onlyNoWebsite) list = filterNoWebsite(list);
+  return filterQuality(list, minRating, minReviews);
+}
+
+async function searchCombined(niche, location, fetchLimit) {
+  const errors = {};
+  let osmPlaces = [];
+  let apifyPlaces = [];
+  const tasks = [];
+  tasks.push(
+    searchOpenStreetMap(niche, location, fetchLimit)
+      .then(r => { osmPlaces = r; })
+      .catch(e => { console.log("Auto OSM falhou:", e.message); errors.openstreetmap = e.message; })
+  );
+  if (hasApify()) {
+    tasks.push(
+      searchApify(niche, location, fetchLimit)
+        .then(r => { apifyPlaces = r; })
+        .catch(e => { console.log("Auto Apify falhou:", e.message); errors.apify = e.message; })
+    );
+  } else {
+    errors.apify = "APIFY_API_TOKEN não configurado";
+  }
+  await Promise.all(tasks);
+  const places = [...osmPlaces, ...apifyPlaces];
+  const partial = Object.keys(errors).length > 0 && places.length > 0;
+  if (places.length === 0 && Object.keys(errors).length > 0) {
+    throw new Error(
+      errors.apify && errors.openstreetmap
+        ? "Não foi possível obter resultados de nenhuma fonte."
+        : (errors.apify || errors.openstreetmap || "Pesquisa falhou")
+    );
+  }
+  let motor = "combined";
+  if (osmPlaces.length && !apifyPlaces.length) motor = "openstreetmap";
+  else if (apifyPlaces.length && !osmPlaces.length) motor = "apify";
+  return { places, motor, partial, errors: Object.keys(errors).length ? errors : null, counts: { openstreetmap: osmPlaces.length, apify: apifyPlaces.length } };
+}
+
+app.post("/api/search", requireAuth, async (req, res) => {
+  let usedMotor = req.body.motor || "auto";
+  try {
+    const {
+      niche = "", location = "", motor = "auto", onlyNoWebsite = true,
+      maxResults = 50, minRating = 0, minReviews = 0
+    } = req.body;
+    let motorNorm = motor;
+    if (motorNorm === "outscraper") motorNorm = "openstreetmap";
+    if (motorNorm === "osm") motorNorm = "openstreetmap";
+    if (!niche.trim()) {
+      return res.status(400).json({ success: false, code: "VALIDATION", error: "Escreve o nicho (ex: cabeleireiros, oficinas).", hint: null });
+    }
+    const fetchLimit = Math.min(Math.max(Number(maxResults) * 2, Number(maxResults)), 200);
+    let places = [];
+    let partial = false;
+    let sourceErrors = null;
+    let counts = null;
+    usedMotor = motorNorm;
+    if (motorNorm === "openstreetmap") {
+      places = await searchOpenStreetMap(niche, location, fetchLimit);
+      usedMotor = "openstreetmap";
+    } else if (motorNorm === "apify") {
+      places = await searchApify(niche, location, fetchLimit);
+      usedMotor = "apify";
+    } else {
+      const result = await searchCombined(niche, location, fetchLimit);
+      places = result.places;
+      usedMotor = result.motor;
+      partial = result.partial;
+      sourceErrors = result.errors;
+      counts = result.counts;
+    }
+    const beforeFilter = places.length;
+    places = dedupeAndMerge(places);
+    places = applyFilters(places, onlyNoWebsite, Number(minRating) || 0, Number(minReviews) || 0);
+    places = sortByQuality(places);
+    const afterFilter = places.length;
+    places = places.slice(0, Number(maxResults) || 50);
+    const payload = {
+      success: true, motor: usedMotor, total: places.length, beforeFilter, afterFilter, partial,
+      query: { niche, location, minRating, minReviews, onlyNoWebsite }, results: places
+    };
+    if (sourceErrors) payload.sourceErrors = sourceErrors;
+    if (counts) payload.counts = counts;
+    if (partial) payload.message = "Pesquisa parcial: uma das fontes falhou; a mostrar resultados disponíveis.";
+    res.json(payload);
+  } catch (error) {
+    console.error("Erro na pesquisa:", error.message);
+    const f = friendlyError(error, usedMotor);
+    res.status(500).json({ success: false, code: f.code, error: f.error, hint: f.hint, motor: usedMotor });
+  }
+});
+
+app.get("/api/status", requireAuth, (req, res) => {
+  const osm = hasOsm();
+  const apify = hasApify();
+  res.json({
+    osm, openstreetmap: osm, apify, outscraper: false,
+    ready: osm || apify, version: "6.3.1", message: "ready"
+  });
+});
+
+app.get("/", requireAuthPage, (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ success: false, error: "Não encontrado." });
+  }
+  if (req.session && req.session.authenticated) {
+    return res.sendFile(path.join(__dirname, "index.html"));
+  }
+  return res.redirect("/login");
+});
+
+app.listen(PORT, () => {
+  console.log(`\nMaps Leads Finder em http://localhost:${PORT}`);
+  console.log(`   OpenStreetMap: ok`);
+  console.log(`   Apify:          ${hasApify() ? "ok" : "off"}`);
+  console.log(`   Auth OTP:       ${authMissing.length ? "config em falta" : "pronto"}\n`);
+});
