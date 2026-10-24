@@ -32,12 +32,12 @@
   <main class="wrap">
     <p class="section-label">Modo de pesquisa</p>
     <div class="motor-grid" role="group" aria-label="Modo de pesquisa">
-      <button type="button" class="motor-card" data-motor="outscraper" onclick="selectMotor(this)">
-        <div class="motor-card-top"><strong>Rápida</strong><span class="chip">Buscas curtas</span></div>
+      <button type="button" class="motor-card" data-motor="osm" onclick="selectMotor(this)">
+        <div class="motor-card-top"><strong>Rápida (OpenStreetMap)</strong><span class="chip">Buscas curtas</span></div>
         <p>Ideal para uma cidade ou zona pequena.</p>
       </button>
       <button type="button" class="motor-card" data-motor="apify" onclick="selectMotor(this)">
-        <div class="motor-card-top"><strong>Completa</strong><span class="chip">Mais volume</span></div>
+        <div class="motor-card-top"><strong>Completa (Apify)</strong><span class="chip">Mais volume</span></div>
         <p>Melhor para várias zonas ou mais resultados.</p>
       </button>
       <button type="button" class="motor-card selected" data-motor="auto" onclick="selectMotor(this)">
@@ -216,7 +216,7 @@
           '<td>' + (escapeHtml(r.phone) || '<span class="empty">—</span>') + '</td>' +
           '<td class="muted">' + (escapeHtml(r.address) || '<span class="empty">—</span>') + '</td>' +
           '<td class="rating">' + (r.rating ? (r.rating + ' <span>(' + (r.reviews || 0) + ')</span>') : '<span class="empty">—</span>') + '</td>' +
-          '<td>' + (r.website ? '<a href="' + escapeHtml(r.website) + '" target="_blank" rel="noopener">Site</a>' : '<span class="tag-ok">Sem website</span>') + '</td>' +
+          '<td>' + (r.website ? '<a href="' + escapeHtml(r.website) + '" target="_blank" rel="noopener">Site</a>' : '<span class="tag-ok">Sem site registado</span>') + '</td>' +
           '<td class="muted">' + (escapeHtml(r.city) || '<span class="empty">—</span>') + '</td>' +
           '<td><div class="actions">' +
             (r.phone ? '<button type="button" class="act" data-phone="' + escapeHtml(r.phone) + '" onclick="copyPhone(this.getAttribute(\'data-phone\'))">Copiar</button>' : '') +
@@ -249,7 +249,7 @@
     function exportCSV() {
       if (!currentResults.length) return alert("Sem resultados");
       const headers = ["Empresa","Telefone","Morada","Avaliação","Reviews","Website","Cidade"];
-      const rows = currentResults.map(r => [r.name,r.phone,r.address,r.rating,r.reviews,r.website||"Sem website",r.city]);
+      const rows = currentResults.map(r => [r.name,r.phone,r.address,r.rating,r.reviews,r.website||"Sem site registado",r.city]);
       const csv = [headers,...rows].map(row => row.map(c => '"'+String(c??"").replace(/"/g,'""')+'"').join(",")).join("\n");
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"}));
@@ -258,7 +258,7 @@
 
     function exportExcel() {
       if (!currentResults.length) return alert("Sem resultados");
-      const data = currentResults.map(r => ({Empresa:r.name,Telefone:r.phone,Morada:r.address,"Avaliação":r.rating,Reviews:r.reviews,Website:r.website||"Sem website",Cidade:r.city}));
+      const data = currentResults.map(r => ({Empresa:r.name,Telefone:r.phone,Morada:r.address,"Avaliação":r.rating,Reviews:r.reviews,Website:r.website||"Sem site registado",Cidade:r.city}));
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Leads");
@@ -279,7 +279,7 @@
       doc.setFont("helvetica", "bold"); doc.setFontSize(16);
       doc.text("Maps Leads Finder", margin, 12);
       doc.setFont("helvetica", "normal"); doc.setFontSize(10);
-      doc.text("Empresas sem website", margin, 20);
+      doc.text("Empresas sem website registado", margin, 20);
       doc.setFontSize(9);
       doc.text(now.toLocaleString("pt-PT"), pageWidth - margin, 12, { align: "right" });
       doc.text(currentResults.length + " leads", pageWidth - margin, 20, { align: "right" });
@@ -289,10 +289,10 @@
       y += 6; doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
       doc.text("Nicho: " + (lastSearchMeta.niche || "—"), margin, y);
       doc.text("Local: " + (lastSearchMeta.location || "—"), margin + 80, y);
-      const modeTxt = lastSearchMeta.motor === "apify" ? "Completa" : lastSearchMeta.motor === "outscraper" ? "Rápida" : "Automática";
+      const modeTxt = lastSearchMeta.motor === "apify" ? "Completa" : (lastSearchMeta.motor === "osm" || lastSearchMeta.motor === "outscraper") ? "Rápida" : "Automática";
       doc.text("Modo: " + modeTxt, margin + 160, y);
       y += 5; doc.setDrawColor(200, 200, 200); doc.line(margin, y, pageWidth - margin, y);
-      const tableData = currentResults.map((r, i) => [String(i + 1), r.name || "—", r.phone || "—", r.address || "—", r.rating ? r.rating + " (" + (r.reviews || 0) + ")" : "—", r.city || "—", r.website ? "Tem site" : "Sem website"]);
+      const tableData = currentResults.map((r, i) => [String(i + 1), r.name || "—", r.phone || "—", r.address || "—", r.rating ? r.rating + " (" + (r.reviews || 0) + ")" : "—", r.city || "—", r.website ? "Tem site" : "Sem site registado"]);
       doc.autoTable({
         startY: y + 4,
         head: [["#", "Empresa", "Telefone", "Morada", "Avaliação", "Cidade", "Website"]],
