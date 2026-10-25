@@ -136,8 +136,7 @@ app.get(Object.keys(PUBLIC_ASSETS), (req, res, next) => {
   });
 });
 
-// --- Search engine and remaining routes loaded from lib/search-app.js ---
-require("./lib/search-app")(app, {
+require("./lib/search-app-loader")(app, {
   requireAuth,
   requireAuthPage,
   isProd,
