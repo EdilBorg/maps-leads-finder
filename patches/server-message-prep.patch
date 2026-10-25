@@ -1,0 +1,117 @@
+--- a/server.js
++++ b/server.js
+@@ -13,6 +13,8 @@
+ const FileStore = require("session-file-store")(session);
+ 
+ const { mountAuthRoutes, requireAuth, requireAuthPage } = require("./lib/auth-routes");
++const locale = require("./lib/locale");
++const leadFields = require("./lib/lead-fields");
+ 
+ const app = express();
+ const PORT = process.env.PORT || 3000;
+@@ -299,9 +301,31 @@
+ 
+ function emptyPlace() {
+   return {
+-    name: "", rating: null, reviews: null, street: "", city: "", state: "", countryCode: "",
+-    address: "", website: "", phone: "", email: "", categories: [], openingHours: "",
+-    latitude: null, longitude: null, place_id: "", source: "", sources: []
++    name: "",
++    rating: null,
++    reviews: null,
++    street: "",
++    city: "",
++    state: "",
++    countryCode: "",
++    address: "",
++    website: "",
++    phone: "",
++    email: "",
++    categories: [],
++    category: "",
++    openingHours: "",
++    latitude: null,
++    longitude: null,
++    place_id: "",
++    googlePlaceId: "",
++    osmId: "",
++    googleMapsUrl: "",
++    source: "",
++    sources: []
+   };
+ }
+ 
+@@ -328,7 +352,13 @@
+   place.openingHours = osmOpeningHours(tags);
+   place.latitude = Number.isFinite(lat) ? lat : null;
+   place.longitude = Number.isFinite(lon) ? lon : null;
+-  place.place_id = el.type && el.id ? `${el.type}/${el.id}` : "";
++  const osmId = el.type && el.id ? `${el.type}/${el.id}` : "";
++  place.osmId = osmId;
++  place.place_id = osmId;
++  place.googlePlaceId = "";
++  place.googleMapsUrl = "";
++  place.category = leadFields.primaryCategory(place.categories);
++  place.countryCode = locale.normalizeCountryCode(place.countryCode) || place.countryCode;
+   place.source = "openstreetmap";
+   place.sources = ["openstreetmap"];
+   return place;
+@@ -381,7 +411,15 @@
+   place.openingHours = p.openingHours || p.opening_hours || "";
+   place.latitude = p.location && p.location.lat != null ? Number(p.location.lat) : (p.lat != null ? Number(p.lat) : null);
+   place.longitude = p.location && p.location.lng != null ? Number(p.location.lng) : (p.lng != null ? Number(p.lng) : (p.lon != null ? Number(p.lon) : null));
+-  place.place_id = p.placeId || p.place_id || "";
++  const googlePlaceId = leadFields.extractGooglePlaceId(p);
++  const googleMapsUrl = leadFields.extractGoogleMapsUrl(p);
++  place.googlePlaceId = googlePlaceId;
++  place.googleMapsUrl = googleMapsUrl;
++  place.osmId = "";
++  place.place_id = googlePlaceId || "";
++  place.category = leadFields.primaryCategory(place.categories);
++  place.countryCode = locale.normalizeCountryCode(place.countryCode) || String(place.countryCode || "").trim();
+   place.source = "apify";
+   place.sources = ["apify"];
+   return place;
+@@ -541,9 +579,11 @@
+ function normalizePhone(phone) {
+   return String(phone || "").replace(/\D/g, "");
+ }
+-function pickNonEmpty(a, b) {
+-  if (a != null && a !== "" && !(Array.isArray(a) && !a.length)) return a;
+-  return b;
++function pickNonEmpty(...vals) {
++  for (const a of vals) {
++    if (a != null && a !== "" && !(Array.isArray(a) && !a.length)) return a;
++  }
++  return vals.length ? vals[vals.length - 1] : "";
+ }
+ function mergePlaces(a, b) {
+   const merged = emptyPlace();
+@@ -562,7 +602,12 @@
+   merged.openingHours = pickNonEmpty(a.openingHours, b.openingHours);
+   merged.latitude = a.latitude != null ? a.latitude : b.latitude;
+   merged.longitude = a.longitude != null ? a.longitude : b.longitude;
+-  merged.place_id = pickNonEmpty(a.place_id, b.place_id);
++  merged.googlePlaceId = pickNonEmpty(a.googlePlaceId, b.googlePlaceId);
++  merged.osmId = pickNonEmpty(a.osmId, b.osmId);
++  merged.googleMapsUrl = pickNonEmpty(a.googleMapsUrl, b.googleMapsUrl);
++  merged.place_id = pickNonEmpty(merged.googlePlaceId, a.place_id, b.place_id, merged.osmId);
++  merged.category = pickNonEmpty(a.category, b.category, leadFields.primaryCategory(merged.categories));
+   const sources = [...new Set([...(a.sources || [a.source]), ...(b.sources || [b.source])].filter(Boolean))];
+   merged.sources = sources;
+   merged.source = sources.length > 1 ? "combined" : (sources[0] || a.source || b.source);
+@@ -694,6 +739,14 @@
+   }
+ });
+ 
++app.get("/api/locale-options", requireAuth, (req, res) => {
++  res.json({
++    success: true,
++    countries: locale.listCountriesForUi(),
++    languages: locale.listLanguagesForUi()
++  });
++});
++
+ app.get("/api/status", requireAuth, (req, res) => {
+   const osm = hasOsm();
+   const apify = hasApify();
