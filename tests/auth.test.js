@@ -92,16 +92,51 @@ test("maskEmail hides local part", () => {
 test("server.js is a real Express app entry (not bootstrap parts)", () => {
   const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   const core = fs.readFileSync(path.join(__dirname, "..", "lib", "app-core.js"), "utf8");
-  const place = fs.readFileSync(path.join(__dirname, "..", "lib", "place-model.js"), "utf8");
+  const placeNorm = fs.readFileSync(
+    path.join(__dirname, "..", "lib", "place-normalize.js"),
+    "utf8"
+  );
   assert.ok(server.includes('require("express")') || server.includes("require('express')"));
   assert.ok(server.includes("requireAuth"));
-  assert.ok(server.includes('require("./lib/app-core")') || server.includes("require('./lib/app-core')"));
+  assert.ok(
+    server.includes('require("./lib/app-core")') || server.includes("require('./lib/app-core')")
+  );
   assert.ok(!server.includes("server-parts"));
   assert.ok(!server.includes("assemble-server"));
   assert.ok(core.includes("/api/search"));
   assert.ok(core.includes("/api/locale-options"));
-  assert.ok(place.includes("googlePlaceId"));
-  assert.ok(place.includes("osmId"));
+  assert.ok(placeNorm.includes("googlePlaceId"));
+  assert.ok(placeNorm.includes("osmId"));
+});
+
+test("search lib modules load without missing requires", () => {
+  const createSearchLib = require("../lib/search-lib");
+  const locale = require("../lib/locale");
+  const leadFields = require("../lib/lead-fields");
+  const lib = createSearchLib({
+    fetch: async () => ({ ok: false, status: 500, text: async () => "" }),
+    locale,
+    leadFields
+  });
+  assert.strictEqual(typeof lib.hasApify, "function");
+  assert.strictEqual(typeof lib.hasOsm, "function");
+  assert.strictEqual(typeof lib.searchOpenStreetMap, "function");
+  assert.strictEqual(typeof lib.searchApify, "function");
+  assert.strictEqual(typeof lib.searchCombined, "function");
+  assert.strictEqual(typeof lib.dedupeAndMerge, "function");
+  assert.strictEqual(typeof lib.applyFilters, "function");
+  assert.strictEqual(typeof lib.friendlyError, "function");
+  assert.ok(lib.hasOsm());
+});
+
+test("place-constants exports required symbols", () => {
+  const createPlaceConstants = require("../lib/place-constants");
+  const c = createPlaceConstants({ fetch: async () => ({}) });
+  assert.ok(Array.isArray(c.OVERPASS_ENDPOINTS) && c.OVERPASS_ENDPOINTS.length >= 1);
+  assert.strictEqual(typeof c.geocodeLocation, "function");
+  assert.strictEqual(typeof c.buildOverpassQuery, "function");
+  assert.strictEqual(typeof c.isOfficialWebsite, "function");
+  assert.strictEqual(typeof c.hasApify, "function");
 });
 
 console.log("\n%d passed, %d failed", passed, failed);

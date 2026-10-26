@@ -1,32 +1,48 @@
-# Preparacao para mensagens comerciais (fase 1)
+# Message prep (Fase 1) — estado real
 
 Branch: `feat/message-prep`
 
-## Aplicar patch do server.js
+## Arranque
 
 ```bash
-git checkout feat/message-prep
-patch -p1 < patches/server-message-prep.patch
-npm test
+npm install
+npm start   # node server.js
 ```
 
-## Ja na branch
+`server.js` monta autenticação/sessão e chama `lib/app-core.js`.
 
-- `lib/locale.js` — pais para idioma comercial
-- `lib/lead-fields.js` — extracao segura de Google Place ID / URL
-- `template.js` — buildLeadMessage, prepareMessageForSend, locale comercial
-- `tests/locale.test.js`
+## Módulos
 
-## Campos de lead
+| Ficheiro | Função |
+|----------|--------|
+| `server.js` | Express, sessão, login, static, monta app-core |
+| `lib/app-core.js` | `/api/search`, `/api/locale-options`, `/api/status`, listen |
+| `lib/search-lib.js` | Orquestra place-model + search-engines |
+| `lib/place-model.js` | Junta constants + normalize + filters |
+| `lib/place-constants.js` | Tokens, Overpass, geocode, tags OSM, helpers |
+| `lib/place-normalize.js` | emptyPlace, normalize OSM/Apify (`googlePlaceId`, `osmId`, `googleMapsUrl`) |
+| `lib/place-filters.js` | dedupe/merge/filters |
+| `lib/search-engines.js` | searchOpenStreetMap, searchApify, searchCombined |
+| `lib/locale.js` | País comercial → idioma por omissão |
+| `lib/lead-fields.js` | Extração segura de Place ID / URL de ficha |
 
-- `googlePlaceId`: Apify placeId (nunca inventado)
-- `googleMapsUrl`: URL de ficha Google Maps se o provider enviar
-- `osmId`: node/id ou way/id OSM
-- `place_id`: legado (Google id se existir, senao OSM)
-- `category`: primeira categoria
+## Localização vs mercado
 
-O botao Maps usa `googleMapsUrl` quando existe; caso contrario pesquisa generica.
+- **Localização** (`#location`): onde se pesquisam empresas.
+- **Mercado (mensagens)** (`#commercialCountry`) + **idioma opcional** (`#commercialLanguage`): só para copy comercial (Fase 2 usará IA). Persistidos via `template.js` / localStorage.
 
-## index.html
+## Msg / WA+ / Maps
 
-Incluir selects Pais/Idioma (mensagens) e data-attributes nos botoes Msg/WA+. Ver diff local ou reaplicar alteracoes descritas no relatorio da fase 1.
+- Msg e WA+ usam `buildLeadMessage` com data-attributes do lead (sem inventar campos).
+- Maps usa `googleMapsUrl` quando for URL de ficha validada; senão pesquisa genérica.
+
+## Testes
+
+```bash
+npm test
+# = node tests/auth.test.js && node tests/locale.test.js
+```
+
+## Fora de âmbito (Fase 2)
+
+Gemini, pesquisa web extra, preview de IA, serviços pagos novos.
