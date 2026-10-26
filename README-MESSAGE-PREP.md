@@ -1,48 +1,38 @@
-# Message prep (Fase 1) — estado real
-
-Branch: `feat/message-prep`
+# Message prep — estado Fase 1
 
 ## Arranque
 
 ```bash
 npm install
-npm start   # node server.js
-```
-
-`server.js` monta autenticação/sessão e chama `lib/app-core.js`.
-
-## Módulos
-
-| Ficheiro | Função |
-|----------|--------|
-| `server.js` | Express, sessão, login, static, monta app-core |
-| `lib/app-core.js` | `/api/search`, `/api/locale-options`, `/api/status`, listen |
-| `lib/search-lib.js` | Orquestra place-model + search-engines |
-| `lib/place-model.js` | Junta constants + normalize + filters |
-| `lib/place-constants.js` | Tokens, Overpass, geocode, tags OSM, helpers |
-| `lib/place-normalize.js` | emptyPlace, normalize OSM/Apify (`googlePlaceId`, `osmId`, `googleMapsUrl`) |
-| `lib/place-filters.js` | dedupe/merge/filters |
-| `lib/search-engines.js` | searchOpenStreetMap, searchApify, searchCombined |
-| `lib/locale.js` | País comercial → idioma por omissão |
-| `lib/lead-fields.js` | Extração segura de Place ID / URL de ficha |
-
-## Localização vs mercado
-
-- **Localização** (`#location`): onde se pesquisam empresas.
-- **Mercado (mensagens)** (`#commercialCountry`) + **idioma opcional** (`#commercialLanguage`): só para copy comercial (Fase 2 usará IA). Persistidos via `template.js` / localStorage.
-
-## Msg / WA+ / Maps
-
-- Msg e WA+ usam `buildLeadMessage` com data-attributes do lead (sem inventar campos).
-- Maps usa `googleMapsUrl` quando for URL de ficha validada; senão pesquisa genérica.
-
-## Testes
-
-```bash
 npm test
-# = node tests/auth.test.js && node tests/locale.test.js
+npm start
 ```
 
-## Fora de âmbito (Fase 2)
+## UI
 
-Gemini, pesquisa web extra, preview de IA, serviços pagos novos.
+O `template.js` na branch chama `POST /api/message/prepare` e abre modal WA+ antes de `wa.me`.
+
+Se `index.html` na branch estiver incompleto, restaura a UI completa a partir de `main` e aplica os selects de mercado/idioma e `data-*` nos botões Msg/WA+/Maps (ver commits locais / artefactos `index.fase1.html`).
+
+## Contrato API
+
+```http
+POST /api/message/prepare
+Content-Type: application/json
+Cookie: sessão autenticada
+
+{
+  "lead": { "name", "city", "address", "phone", "category", "website", "googlePlaceId", "osmId", "googleMapsUrl", ... },
+  "commercialCountry": "PT",
+  "language": "",
+  "forceRefresh": false
+}
+```
+
+Resposta: `{ success, text, source, cached, warning? }`.
+
+Sem `GEMINI_API_KEY`, o backend devolve fallback de texto (ainda `success: true` com `source: fallback`).
+
+## Fora de âmbito nesta fase
+
+Limpeza de `parts/`, `assemble-server.js`, e endurecimento de `express.static`.

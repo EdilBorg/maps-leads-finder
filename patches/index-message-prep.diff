@@ -1,0 +1,8 @@
+--- a/index.html
++++ b/index.html
+@@ message-prep UI additions (apply on full main index) @@
++# commercialCountry / commercialLanguage selects near searchBtn
++# leadAttrs on Msg/WA+ buttons (phone, category, googlePlaceId, osmId, googleMapsUrl, ...)
++# mapsHref uses googleMapsUrl when place URL else maps search
++# loadCommercialLocaleOptions() fetches /api/locale-options
++# Full file: artifacts/index.fase1.html sha256 eaf66a9387e4654f7a164c759696ef0ae04951c94adfb1968c792da42e2c1756
