@@ -76,9 +76,14 @@
       address: btn.getAttribute("data-address") || "",
       phone: btn.getAttribute("data-phone") || "",
       category: btn.getAttribute("data-category") || "",
+      countryCode: btn.getAttribute("data-country") || "",
+      website: btn.getAttribute("data-website") || "",
+      rating: btn.getAttribute("data-rating") || "",
+      reviews: btn.getAttribute("data-reviews") || "",
       googlePlaceId: btn.getAttribute("data-google-place-id") || "",
       googleMapsUrl: btn.getAttribute("data-google-maps-url") || "",
-      osmId: btn.getAttribute("data-osm-id") || ""
+      osmId: btn.getAttribute("data-osm-id") || "",
+      sources: (btn.getAttribute("data-sources") || "").split(",").filter(Boolean)
     };
   }
 
