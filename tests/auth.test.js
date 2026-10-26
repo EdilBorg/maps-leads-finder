@@ -91,13 +91,17 @@ test("maskEmail hides local part", () => {
 
 test("server.js is a real Express app entry (not bootstrap parts)", () => {
   const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+  const core = fs.readFileSync(path.join(__dirname, "..", "lib", "app-core.js"), "utf8");
+  const place = fs.readFileSync(path.join(__dirname, "..", "lib", "place-model.js"), "utf8");
   assert.ok(server.includes('require("express")') || server.includes("require('express')"));
-  assert.ok(server.includes("/api/search"));
   assert.ok(server.includes("requireAuth"));
+  assert.ok(server.includes('require("./lib/app-core")') || server.includes("require('./lib/app-core')"));
   assert.ok(!server.includes("server-parts"));
   assert.ok(!server.includes("assemble-server"));
-  assert.ok(server.includes("googlePlaceId"));
-  assert.ok(server.includes("/api/locale-options"));
+  assert.ok(core.includes("/api/search"));
+  assert.ok(core.includes("/api/locale-options"));
+  assert.ok(place.includes("googlePlaceId"));
+  assert.ok(place.includes("osmId"));
 });
 
 console.log("\n%d passed, %d failed", passed, failed);
