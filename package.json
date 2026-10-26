@@ -4,8 +4,9 @@
   "description": "Prospecção de empresas sem website — Apify + OpenStreetMap, acesso por OTP",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "node scripts/restore-index.js && node server.js",
+    "dev": "node scripts/restore-index.js && node server.js",
+    "restore-index": "node scripts/restore-index.js",
     "test": "node tests/auth.test.js && node tests/locale.test.js && node tests/message.test.js"
   },
   "dependencies": {
