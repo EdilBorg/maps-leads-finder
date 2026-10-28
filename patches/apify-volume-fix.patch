@@ -1,0 +1,4 @@
+See server-volume-fix: searchApify must use locationQuery separate from searchStringsArray; deeperCityScrape when limit>=40; pipeline stats in /api/search response.
+
+Apply: patch -p0 < patches/apify-volume-fix.patch  (from repo root against server.js)
+Or replace searchApify + /api/search post-processing from the commit message body.
