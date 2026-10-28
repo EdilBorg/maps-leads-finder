@@ -1,112 +1,185 @@
 "use strict";
 const assert = require("assert");
+const { searchOpenStreetMap } = require("../lib/osm-search");
 
-let passed = 0, failed = 0;
+let passed = 0;
+let failed = 0;
 function test(name, fn) {
   return Promise.resolve()
     .then(fn)
-    .then(() => { passed++; console.log("  OK", name); })
-    .catch((e) => { failed++; console.error("  FAIL", name, e.message); });
+    .then(() => {
+      passed++;
+      console.log("  OK", name);
+    })
+    .catch((e) => {
+      failed++;
+      console.error("  FAIL", name, e && e.message ? e.message : e);
+    });
 }
 
-async function searchWithEndpoints(endpoints, fetchFn, perTryMs) {
-  let lastErr = null;
-  for (const endpoint of endpoints) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), perTryMs);
-    try {
-      const res = await fetchFn(endpoint, { signal: controller.signal });
-      if (res.status === 429 || res.status === 504 || res.status === 502) {
-        lastErr = new Error("rate " + res.status);
-        continue;
-      }
-      if (!res.ok) {
-        lastErr = new Error("http " + res.status);
-        continue;
-      }
-      const data = await res.json();
-      return Array.isArray(data.elements) ? data.elements : [];
-    } catch (e) {
-      lastErr = e.name === "AbortError" ? new Error("timeout " + endpoint) : e;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-  throw lastErr || new Error("unavailable");
+function deps(overrides) {
+  return Object.assign(
+    {
+      niche: "cabeleireiros",
+      location: "Lisboa",
+      limit: 10,
+      endpoints: ["http://overpass-a.test", "http://overpass-b.test"],
+      geocodeLocation: async () => ({
+        south: 1,
+        north: 2,
+        west: 3,
+        east: 4,
+        display: "Lisboa"
+      }),
+      buildOverpassQuery: () => "[out:json];out;",
+      normalizeOsmElement: (el) => {
+        if (!el || !el.tags || !el.tags.name) return null;
+        return {
+          name: el.tags.name,
+          address: "",
+          phone: "",
+          source: "openstreetmap",
+          sources: ["openstreetmap"]
+        };
+      },
+      timeoutMs: 80
+    },
+    overrides || {}
+  );
 }
 
 async function run() {
-  console.log("OSM search unit tests\n");
+  console.log("OSM search unit tests (lib/osm-search.js production module)\n");
 
-  await test("second endpoint used after first timeout", async () => {
-    let calls = [];
-    const elements = await searchWithEndpoints(
-      ["http://a", "http://b"],
-      async (url, opts) => {
-        calls.push(url);
-        if (url === "http://a") {
-          await new Promise((_, rej) => {
-            opts.signal.addEventListener("abort", () => {
-              const e = new Error("aborted");
-              e.name = "AbortError";
-              rej(e);
-            });
-          });
-        }
-        return {
-          status: 200,
-          ok: true,
-          json: async () => ({ elements: [{ type: "node", id: 1, tags: { name: "X" } }] })
-        };
-      },
-      30
+  await test("rejects missing niche", async () => {
+    await assert.rejects(
+      () => searchOpenStreetMap(deps({ niche: "" })),
+      /Nicho/
     );
-    assert.deepStrictEqual(calls, ["http://a", "http://b"]);
-    assert.strictEqual(elements.length, 1);
   });
 
-  await test("HTTP error on first does not block second", async () => {
-    const elements = await searchWithEndpoints(
-      ["http://a", "http://b"],
-      async (url) => {
-        if (url === "http://a") return { status: 502, ok: false };
-        return {
+  await test("second endpoint used after first AbortError timeout", async () => {
+    const calls = [];
+    const places = await searchOpenStreetMap(
+      deps({
+        timeoutMs: 40,
+        fetchFn: async (url, opts) => {
+          calls.push(url);
+          if (url.includes("overpass-a")) {
+            await new Promise((_, rej) => {
+              opts.signal.addEventListener("abort", () => {
+                const e = new Error("aborted");
+                e.name = "AbortError";
+                rej(e);
+              });
+            });
+          }
+          return {
+            status: 200,
+            ok: true,
+            json: async () => ({
+              elements: [{ type: "node", id: 1, tags: { name: "Salão A" } }]
+            })
+          };
+        }
+      })
+    );
+    assert.deepStrictEqual(calls, [
+      "http://overpass-a.test",
+      "http://overpass-b.test"
+    ]);
+    assert.strictEqual(places.length, 1);
+    assert.strictEqual(places[0].name, "Salão A");
+  });
+
+  await test("HTTP 502 on first does not block second endpoint", async () => {
+    const places = await searchOpenStreetMap(
+      deps({
+        fetchFn: async (url) => {
+          if (url.includes("overpass-a")) {
+            return { status: 502, ok: false, text: async () => "bad gateway" };
+          }
+          return {
+            status: 200,
+            ok: true,
+            json: async () => ({ elements: [] })
+          };
+        }
+      })
+    );
+    assert.deepStrictEqual(places, []);
+  });
+
+  await test("valid empty elements is success (zero results, not throw)", async () => {
+    const places = await searchOpenStreetMap(
+      deps({
+        endpoints: ["http://only.test"],
+        fetchFn: async () => ({
           status: 200,
           ok: true,
           json: async () => ({ elements: [] })
-        };
-      },
-      5000
+        })
+      })
     );
-    assert.strictEqual(elements.length, 0);
+    assert.deepStrictEqual(places, []);
   });
 
-  await test("valid empty elements is success not throw", async () => {
-    const elements = await searchWithEndpoints(
-      ["http://only"],
-      async () => ({
-        status: 200,
-        ok: true,
-        json: async () => ({ elements: [] })
-      }),
-      5000
-    );
-    assert.deepStrictEqual(elements, []);
-  });
-
-  await test("all endpoints fail throws", async () => {
+  await test("all endpoints fail throws last error", async () => {
     await assert.rejects(
       () =>
-        searchWithEndpoints(
-          ["http://a", "http://b"],
-          async () => ({ status: 500, ok: false }),
-          5000
+        searchOpenStreetMap(
+          deps({
+            fetchFn: async () => ({
+              status: 500,
+              ok: false,
+              text: async () => "err"
+            })
+          })
         ),
-      /http 500/
+      /Overpass erro 500/
     );
+  });
+
+  await test("geocode failure propagates", async () => {
+    await assert.rejects(
+      () =>
+        searchOpenStreetMap(
+          deps({
+            geocodeLocation: async () => {
+              throw new Error("Sem resultados de localização para: X");
+            }
+          })
+        ),
+      /localização/
+    );
+  });
+
+  await test("each attempt uses a fresh AbortController (parallel safe)", async () => {
+    const signals = [];
+    await searchOpenStreetMap(
+      deps({
+        endpoints: ["http://a.test", "http://b.test"],
+        fetchFn: async (url, opts) => {
+          signals.push(opts.signal);
+          if (url.includes("a.test")) {
+            return { status: 429, ok: false, text: async () => "rate" };
+          }
+          return {
+            status: 200,
+            ok: true,
+            json: async () => ({
+              elements: [{ type: "node", id: 2, tags: { name: "B" } }]
+            })
+          };
+        }
+      })
+    );
+    assert.strictEqual(signals.length, 2);
+    assert.notStrictEqual(signals[0], signals[1]);
   });
 
   console.log("\n%d passed, %d failed", passed, failed);
   process.exit(failed ? 1 : 0);
 }
+
 run();

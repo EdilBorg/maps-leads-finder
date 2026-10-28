@@ -49,12 +49,13 @@ test("server static sets no-cache for js/css", () => {
   assert.ok(server.includes("setHeaders"));
 });
 
-test("OSM uses per-endpoint AbortController", () => {
-  const fn = server.slice(server.indexOf("async function searchOpenStreetMap"));
-  const body = fn.slice(0, fn.indexOf("async function searchApify"));
-  const loopIdx = body.indexOf("for (const endpoint");
-  const ctrlIdx = body.indexOf("new AbortController()");
-  assert.ok(loopIdx >= 0 && ctrlIdx > loopIdx, "AbortController must be inside endpoint loop");
+test("OSM delegates to lib/osm-search (production implementation)", () => {
+  assert.ok(server.includes('require("./lib/osm-search")') || server.includes("require('./lib/osm-search')"));
+  assert.ok(server.includes("osmSearch.searchOpenStreetMap"));
+  const osmLib = fs.readFileSync(path.join(root, "lib/osm-search.js"), "utf8");
+  const loopIdx = osmLib.indexOf("for (const endpoint");
+  const ctrlIdx = osmLib.indexOf("new AbortController()");
+  assert.ok(loopIdx >= 0 && ctrlIdx > loopIdx, "AbortController must be inside endpoint loop in lib/osm-search.js");
 });
 
 console.log("\n%d passed, %d failed", passed, failed);
