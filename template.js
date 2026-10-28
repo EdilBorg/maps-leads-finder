@@ -83,6 +83,7 @@
       '    <textarea id="msgText" rows="7" placeholder="A mensagem gerada aparece aqui. Podes editar antes de copiar ou abrir o WhatsApp."></textarea>' +
       "  </div>" +
       '  <p class="msg-status" id="msgStatus" aria-live="polite"></p>' +
+      '  <div class="msg-sources hidden" id="msgSources"></div>' +
       '  <div class="msg-actions">' +
       '    <button type="button" class="btn-ghost" id="msgRegenBtn">Gerar novamente</button>' +
       '    <button type="button" class="btn-ghost" id="msgCopyBtn">Copiar</button>' +
@@ -139,6 +140,8 @@
     document.getElementById("msgMarket").value = getStoredMarket();
     document.getElementById("msgText").value = "";
     document.getElementById("msgStatus").textContent = "";
+    var srcEl = document.getElementById("msgSources");
+    if (srcEl) { srcEl.innerHTML = ""; srcEl.classList.add("hidden"); }
     document.getElementById("msgWaBtn").style.display = lead.wa ? "" : "none";
     m.classList.remove("hidden");
     document.getElementById("msgMarket").focus();
@@ -196,7 +199,35 @@
           throw new Error((data && data.error) || "Não foi possível gerar a mensagem.");
         }
         document.getElementById("msgText").value = data.message;
-        if (status) status.textContent = fromRegen ? "Nova mensagem gerada." : "Mensagem gerada. Podes editar antes de enviar.";
+        if (status) {
+          var bits = [fromRegen ? "Nova mensagem gerada." : "Mensagem gerada. Podes editar antes de enviar."];
+          if (data.searchFallback) bits.push("Pesquisa web limitada — baseada nos dados da listagem.");
+          else if (data.researchMode === "grounded") bits.push("Com pesquisa web.");
+          if (data.cached) bits.push("(cache)");
+          status.textContent = bits.join(" ");
+        }
+        var srcBox = document.getElementById("msgSources");
+        if (srcBox) {
+          srcBox.innerHTML = "";
+          if (data.sources && data.sources.length) {
+            var lab = document.createElement("div");
+            lab.className = "msg-sources-label";
+            lab.textContent = "Fontes consultadas (pesquisa web)";
+            srcBox.appendChild(lab);
+            data.sources.forEach(function (s) {
+              if (!s || !s.url) return;
+              var a = document.createElement("a");
+              a.href = s.url;
+              a.target = "_blank";
+              a.rel = "noopener noreferrer";
+              a.textContent = s.title || s.url;
+              srcBox.appendChild(a);
+            });
+            srcBox.classList.remove("hidden");
+          } else {
+            srcBox.classList.add("hidden");
+          }
+        }
       })
       .catch(function (err) {
         if (status) status.textContent = err.message || "Erro ao gerar mensagem.";
