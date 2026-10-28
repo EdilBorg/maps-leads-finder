@@ -31,6 +31,7 @@ function runEnsure(scriptRel) {
 
 runEnsure("scripts/ensure-apify-fix.js");
 runEnsure("scripts/ensure-index-fix.js");
+runEnsure("scripts/ensure-message-route.js");
 
 console.log("[bootstrap] starting server.js (PORT=" + (process.env.PORT || "3000") + ")");
 require("./server.js");

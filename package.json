@@ -1,13 +1,13 @@
 {
   "name": "maps-leads-finder",
-  "version": "6.3.2",
+  "version": "6.4.0",
   "description": "Prospecção de empresas sem website — Apify + OpenStreetMap, acesso por OTP",
   "main": "bootstrap.js",
   "scripts": {
     "start": "node bootstrap.js",
     "dev": "node bootstrap.js",
-    "test": "node tests/pipeline.test.js",
-    "postinstall": "node scripts/ensure-apify-fix.js && node scripts/ensure-index-fix.js"
+    "test": "node tests/pipeline.test.js && node tests/gemini-message.test.js",
+    "postinstall": "node scripts/ensure-apify-fix.js && node scripts/ensure-index-fix.js && node scripts/ensure-message-route.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
