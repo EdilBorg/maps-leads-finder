@@ -174,7 +174,8 @@
       hasWebsite: !!lead.hasWebsite,
       rating: lead.rating ? Number(lead.rating) : null,
       reviews: lead.reviews ? Number(lead.reviews) : null,
-      market: market
+      market: market,
+      skipCache: !!fromRegen
     };
 
     fetch("/api/messages/generate", {
@@ -231,6 +232,10 @@
       })
       .catch(function (err) {
         if (status) status.textContent = err.message || "Erro ao gerar mensagem.";
+        var ta = document.getElementById("msgText");
+        if (ta && !fromRegen) ta.value = "";
+        var srcBox = document.getElementById("msgSources");
+        if (srcBox) { srcBox.innerHTML = ""; srcBox.classList.add("hidden"); }
         toast(err.message || "Erro ao gerar mensagem");
       })
       .finally(function () {
