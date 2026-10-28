@@ -14,3 +14,7 @@
 .msg-field textarea{resize:vertical;min-height:120px;line-height:1.45}
 .msg-status{min-height:1.2em;font-size:.85rem;opacity:.85;margin:0 0 12px}
 .msg-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.msg-sources{margin:0 0 12px;font-size:.75rem;opacity:.85;display:flex;flex-direction:column;gap:4px}
+.msg-sources.hidden{display:none}
+.msg-sources-label{font-weight:600;opacity:.9}
+.msg-sources a{color:inherit;text-decoration:underline;word-break:break-all}
