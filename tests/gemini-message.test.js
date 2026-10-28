@@ -41,8 +41,8 @@ async function run() {
   console.log("Gemini message unit tests\n");
   clearMessageCache();
 
-  await test("default model is gemini-3.8-flash", () => {
-    assert.strictEqual(DEFAULT_MODEL, "gemini-3.8-flash");
+  await test("default model is gemini-3.5-flash-lite", () => {
+    assert.strictEqual(DEFAULT_MODEL, "gemini-3.5-flash-lite");
   });
 
   await test("normalize requires name", () => {
@@ -131,24 +131,96 @@ async function run() {
     );
   });
 
-  await test("generate maps rate limit", async () => {
+  await test("429 on search then success without grounding", async () => {
     clearMessageCache();
+    const calls = [];
+    const out = await generateCommercialMessage(
+      { name: "Salão Norte", city: "Lisboa", location: "Lisboa Portugal", niche: "cabeleireiros" },
+      {
+        apiKey: "k",
+        skipCache: true,
+        fetchFn: async (url, init) => {
+          const body = JSON.parse(init.body);
+          calls.push({ tools: !!(body.tools && body.tools.length) });
+          if (calls.length === 1) {
+            return { ok: false, status: 429, text: async () => '{"error":{"code":429,"message":"Resource exhausted"}}' };
+          }
+          return geminiOk(
+            "Olá, notei o vosso salão em Lisboa e preparei algo para mostrar. Temos 10-15 minutos?"
+          );
+        }
+      }
+    );
+    assert.strictEqual(calls.length, 2);
+    assert.strictEqual(calls[0].tools, true);
+    assert.strictEqual(calls[1].tools, false);
+    assert.ok(out.message);
+    assert.strictEqual(out.researchMode, "listing_only");
+    assert.strictEqual(out.searchFallback, true);
+  });
+
+  await test("429 on both search and listing-only yields GEMINI_RATE_LIMIT", async () => {
+    clearMessageCache();
+    let n = 0;
     await assert.rejects(
       () =>
         generateCommercialMessage(
-          { name: "X", city: "Lisboa", location: "Portugal" },
+          { name: "X", city: "Lisboa" },
           {
-            apiKey: "test-key",
+            apiKey: "k",
             skipCache: true,
-            fetchFn: async () => ({
-              ok: false,
-              status: 429,
-              text: async () => JSON.stringify({ error: { message: "quota" } })
-            })
+            fetchFn: async () => {
+              n++;
+              return { ok: false, status: 429, text: async () => "rate" };
+            }
           }
         ),
       (e) => e.code === "GEMINI_RATE_LIMIT" && e.status === 429
     );
+    assert.strictEqual(n, 2);
+  });
+
+  await test("401 on search does not attempt listing-only fallback", async () => {
+    clearMessageCache();
+    let n = 0;
+    await assert.rejects(
+      () =>
+        generateCommercialMessage(
+          { name: "X", city: "Lisboa" },
+          {
+            apiKey: "k",
+            skipCache: true,
+            fetchFn: async () => {
+              n++;
+              return { ok: false, status: 401, text: async () => "auth" };
+            }
+          }
+        ),
+      (e) => e.code === "GEMINI_AUTH"
+    );
+    assert.strictEqual(n, 1);
+  });
+
+  await test("429 on search then 403 on listing-only surfaces auth error", async () => {
+    clearMessageCache();
+    let n = 0;
+    await assert.rejects(
+      () =>
+        generateCommercialMessage(
+          { name: "X", city: "Lisboa" },
+          {
+            apiKey: "k",
+            skipCache: true,
+            fetchFn: async () => {
+              n++;
+              if (n === 1) return { ok: false, status: 429, text: async () => "rate" };
+              return { ok: false, status: 403, text: async () => "forbidden" };
+            }
+          }
+        ),
+      (e) => e.code === "GEMINI_AUTH"
+    );
+    assert.strictEqual(n, 2);
   });
 
   await test("API key sent via header not URL", async () => {
@@ -193,7 +265,7 @@ async function run() {
         }
       }
     );
-    assert.ok(url.includes("gemini-3.8-flash"));
+    assert.ok(url.includes("gemini-3.5-flash-lite"));
     assert.ok(body.tools && body.tools[0] && body.tools[0].google_search);
   });
 
