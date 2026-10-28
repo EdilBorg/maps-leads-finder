@@ -28,7 +28,7 @@ function buildApifyInput(query, location, limit) {
   const input = {
     searchStringsArray: [niche || loc || "business"],
     maxCrawledPlacesPerSearch: Math.min(Math.max(Number(limit) || 50, 1), 200),
-    language: "pt",
+    language: "pt-PT",
     skipClosedPlaces: true,
     deeperCityScrape: Number(limit) >= 40
   };
@@ -69,5 +69,12 @@ test("onlyNoWebsite keeps places without site", () => {
   ];
   assert.strictEqual(filterNoWebsite(places).length, 2);
 });
+
+test("Apify input language must be pt-PT (actor rejects bare pt)", () => {
+  const input = buildApifyInput("advogado", "Lisboa Portugal", 50);
+  assert.strictEqual(input.language, "pt-PT");
+  assert.notStrictEqual(input.language, "pt");
+});
+
 console.log("\n%d passed, %d failed", passed, failed);
 process.exit(failed ? 1 : 0);
