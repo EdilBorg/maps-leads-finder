@@ -4,10 +4,10 @@
   "description": "Prospecção de empresas sem website — Apify + OpenStreetMap, acesso por OTP",
   "main": "server.js",
   "scripts": {
-    "start": "node scripts/ensure-apify-fix.js && node server.js",
-    "dev": "node scripts/ensure-apify-fix.js && node server.js",
+    "start": "node scripts/ensure-apify-fix.js && node scripts/ensure-index-fix.js && node server.js",
+    "dev": "node scripts/ensure-apify-fix.js && node scripts/ensure-index-fix.js && node server.js",
     "test": "node tests/pipeline.test.js",
-    "postinstall": "node scripts/ensure-apify-fix.js"
+    "postinstall": "node scripts/ensure-apify-fix.js && node scripts/ensure-index-fix.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
