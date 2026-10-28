@@ -5,8 +5,7 @@ const indexPath = path.join(__dirname, "..", "index.html");
 let html = fs.readFileSync(indexPath, "utf8");
 if (html.includes("lastPipeline") && html.includes("pipeline: ")) {
   console.log("[ensure-index-fix] already applied");
-  process.exit(0);
-}
+} else {
 let changed = false;
 
 const oldSuccess =
@@ -95,4 +94,5 @@ if (changed) {
   console.log("[ensure-index-fix] index.html updated");
 } else {
   console.log("[ensure-index-fix] no matching blocks (already updated or unexpected HTML)");
+}
 }
