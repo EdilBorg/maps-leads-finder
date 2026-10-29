@@ -7,7 +7,7 @@
     "start": "node bootstrap.js",
     "dev": "node bootstrap.js",
     "test": "node tests/pipeline.test.js && node tests/gemini-message.test.js && node tests/osm-search.test.js && node tests/template-contract.test.js",
-    "postinstall": "node scripts/ensure-apify-fix.js && node scripts/ensure-index-fix.js && node scripts/ensure-message-route.js && node scripts/ensure-msg-styles.js && node scripts/ensure-server-hardening.js && node scripts/ensure-cache-bust.js"
+    "postinstall": "node scripts/ensure-apify-fix.js && node scripts/ensure-index-fix.js && node scripts/ensure-message-route.js && node scripts/ensure-msg-styles.js && node scripts/ensure-server-hardening.js && node scripts/ensure-cache-bust.js && node scripts/ensure-template-json-safe.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

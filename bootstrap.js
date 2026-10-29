@@ -35,6 +35,7 @@ runEnsure("scripts/ensure-message-route.js");
 runEnsure("scripts/ensure-msg-styles.js");
 runEnsure("scripts/ensure-server-hardening.js");
 runEnsure("scripts/ensure-cache-bust.js");
+runEnsure("scripts/ensure-template-json-safe.js");
 
 console.log("[bootstrap] starting server.js (PORT=" + (process.env.PORT || "3000") + ")");
 require("./server.js");
