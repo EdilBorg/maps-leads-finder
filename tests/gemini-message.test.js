@@ -68,7 +68,7 @@ async function run() {
     assert.strictEqual(resolveMarket("es-ES", "Lisboa", "", ""), "es-ES");
   });
 
-  await test("prompt includes four commercial requirements", () => {
+  await test("prompt includes commercial prospecting rules", () => {
     const lead = normalizeLeadInput({
       name: "Oficina Silva",
       city: "Porto",
@@ -76,25 +76,32 @@ async function run() {
       location: "Porto Portugal"
     });
     const prompt = buildPrompt(lead, "pt-PT", "listing_only", []);
-    assert.match(prompt, /Context/i);
-    assert.match(prompt, /Personalisation|Personalization/i);
-    assert.match(prompt, /Curiosity/i);
-    assert.match(prompt, /Meeting/i);
+    assert.match(prompt, /Never invent/i);
+    assert.match(prompt, /website/i);
     assert.match(prompt, /demo/i);
+    assert.match(prompt, /10.?15/i);
     assert.match(prompt, /Oficina Silva/);
     assert.match(prompt, /European Portuguese|pt-PT/i);
+    assert.match(prompt, /perfil digital tem margem|Forbidden empty formulas/i);
   });
 
   await test("prompt grounded notes do not invent when listing_only", () => {
     const lead = normalizeLeadInput({ name: "X", city: "Y", niche: "Z" });
     const p = buildPrompt(lead, "pt-PT", "listing_only", []);
-    assert.match(p, /did not return useful|listing facts/i);
+    assert.match(p, /No useful or unambiguous|listing facts|Confirmed data/i);
   });
 
   await test("validateMessage rejects empty and demo", () => {
     assert.throws(() => validateMessage(""), (e) => e.code === "EMPTY_RESPONSE");
     assert.throws(
       () => validateMessage("Olá, posso enviar uma demo do site?"),
+      (e) => e.code === "REJECTED_CONTENT"
+    );
+  });
+
+  await test("validateMessage rejects empty commercial formulas", () => {
+    assert.throws(
+      () => validateMessage("Olá, preparei algo específico para vos mostrar sobre o vosso negócio."),
       (e) => e.code === "REJECTED_CONTENT"
     );
   });
@@ -146,7 +153,7 @@ async function run() {
             return { ok: false, status: 429, text: async () => '{"error":{"code":429,"message":"Resource exhausted"}}' };
           }
           return geminiOk(
-            "Olá, notei o vosso salão em Lisboa e preparei algo para mostrar. Temos 10-15 minutos?"
+            "Olá, notei o vosso salão em Lisboa e gostaria de falar sobre o site. Têm 10 a 15 minutos esta semana?"
           );
         }
       }
@@ -236,7 +243,7 @@ async function run() {
           seenUrl = url;
           seenHeaders = init.headers || {};
           return geminiOk(
-            "Bom dia, encontrei a Padaria Norte em Braga. Preparei algo para vos mostrar e gostaria de uma conversa de 10 a 15 minutos."
+            "Bom dia, trabalho com websites para negócios locais e gostaria de falar convosco na Padaria Norte. Têm 10 a 15 minutos?"
           );
         }
       }
@@ -259,7 +266,7 @@ async function run() {
           url = u;
           body = JSON.parse(init.body);
           return geminiOk(
-            "Olá, identifiquei a Oficina Silva no Porto. Tenho algo preparado para mostrar e proponho 10 a 15 minutos de conversa.",
+            "Olá, trabalho com presença online para oficinas e gostaria de falar com a Oficina Silva. Proponho 10 a 15 minutos.",
             { groundingChunks: [{ web: { uri: "https://oficina-silva.example", title: "Oficina" } }] }
           );
         }
@@ -278,7 +285,7 @@ async function run() {
         skipCache: true,
         fetchFn: async () =>
           geminiOk(
-            "Olá, ao rever a Clínica ABC em Lisboa encontrei informação pública sobre a vossa actividade. Preparei algo concreto para vos mostrar e proponho uma conversa breve de 10 a 15 minutos.",
+            "Olá, vi a Clínica ABC em Lisboa e o vosso site oficial. Trabalho com websites para clínicas e proponho uma conversa breve de 10 a 15 minutos.",
             {
               groundingChunks: [{ web: { uri: "https://clinica-abc.pt", title: "Clínica ABC" } }],
               groundingSupports: [{ segment: { text: "Clínica dentária em Lisboa" } }]
@@ -307,7 +314,7 @@ async function run() {
             return { ok: false, status: 500, text: async () => "search down" };
           }
           return geminiOk(
-            "Olá, identifiquei a Loja Nova em Faro na nossa pesquisa de negócios locais. Preparei algo para mostrar e proponho 10 a 15 minutos de conversa."
+            "Olá, contacto a Loja Nova em Faro sobre websites para lojas locais. Têm 10 a 15 minutos para conversarmos?"
           );
         }
       }
@@ -329,7 +336,7 @@ async function run() {
           calls++;
           if (calls === 1) return geminiOk("");
           return geminiOk(
-            "Olá, encontrei o Atelier Rio em Coimbra. Tenho algo preparado para mostrar ao responsável e sugiro uma conversa de 10 a 15 minutos."
+            "Olá, gostaria de falar com o Atelier Rio em Coimbra sobre o vosso site. Proponho 10 a 15 minutos."
           );
         }
       }
@@ -344,7 +351,7 @@ async function run() {
     const fetchFn = async () => {
       calls++;
       return geminiOk(
-        "Olá, vi a Empresa Cache em Lisboa. Preparei algo para mostrar e proponho 10 a 15 minutos."
+        "Olá, contacto a Empresa Cache em Lisboa sobre websites. Têm 10 a 15 minutos?"
       );
     };
     const a = await generateCommercialMessage(
