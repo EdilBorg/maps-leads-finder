@@ -11,18 +11,17 @@ const pairs = [
   ['href="styles.css"', 'href="styles.css?v=' + VER + '"'],
   ['href="styles-msg.css"', 'href="styles-msg.css?v=' + VER + '"']
 ];
-// Also bump existing ?v= versions
-html2 = html;
 for (const name of ["history.js", "template.js", "styles.css", "styles-msg.css"]) {
   const re = new RegExp(name.replace(".", "\\.") + "\\?v=[^\"']+", "g");
   const next = name + "?v=" + VER;
-  if (re.test(html2)) {
-    html2 = html2.replace(re, next);
+  if (re.test(html)) {
+    html = html.replace(re, next);
     changed = true;
   }
 }
-html = html2;
-for (const [a, b] of pairs) {
+for (const pair of pairs) {
+  const a = pair[0];
+  const b = pair[1];
   if (html.includes(a) && !html.includes(b)) {
     html = html.replace(a, b);
     changed = true;
