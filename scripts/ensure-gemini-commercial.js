@@ -12,8 +12,8 @@ const p1 = path.join(__dirname, "gemini-src-part1.txt");
 const p2 = path.join(__dirname, "gemini-src-part2.txt");
 if (fs.existsSync(p1) && fs.existsSync(p2)) {
   fs.writeFileSync(target, fs.readFileSync(p1, "utf8") + fs.readFileSync(p2, "utf8"));
-  console.log("[ensure-gemini-commercial] lib/gemini-message.js assembled from source parts");
+  console.log("[ensure-gemini-commercial] assembled lib/gemini-message.js");
   process.exit(0);
 }
-console.warn("[ensure-gemini-commercial] source parts missing; leaving module unchanged");
+console.warn("[ensure-gemini-commercial] source parts missing");
 process.exit(0);

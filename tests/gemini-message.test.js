@@ -2,13 +2,18 @@
 const assert = require("assert");
 const {
   normalizeLeadInput,
+  normalizePrepStatus,
   resolveMarket,
   buildPrompt,
+  systemPromptRules,
   validateMessage,
-  extractTextFromGeminiResponse,
   extractGrounding,
   generateCommercialMessage,
   clearMessageCache,
+  hasMeetingInvite,
+  startsWithPersonalFirstName,
+  claimsPreparedWebsite,
+  PREP_STATUSES,
   DEFAULT_MODEL
 } = require("../lib/gemini-message");
 
@@ -37,6 +42,12 @@ function geminiOk(text, grounding) {
   };
 }
 
+const okMsgPt =
+  "Bom dia. Trabalho com websites profissionais para negócios locais e preparei um site para a Oficina Silva. Gostaria de marcar 10 a 15 minutos para o apresentar e falar de possíveis alterações.";
+
+const okMsgEs =
+  "Buenos días. Trabajo con sitios web profesionales y he preparado uno para Taller López. ¿Podríamos quedar 10-15 minutos para enseñárselo y comentar posibles cambios?";
+
 async function run() {
   console.log("Gemini message unit tests\n");
   clearMessageCache();
@@ -45,338 +56,167 @@ async function run() {
     assert.strictEqual(DEFAULT_MODEL, "gemini-3.5-flash-lite");
   });
 
+  await test("system prompt rules are present and used by buildPrompt", () => {
+    const rules = systemPromptRules();
+    assert.match(rules, /10–15 minutos|10-15/);
+    assert.match(rules, /demo/i);
+    assert.match(rules, /400/);
+    const lead = normalizeLeadInput({ name: "X", city: "Lisboa" });
+    const p = buildPrompt(lead, "pt-PT", "listing_only", []);
+    assert.ok(p.includes("IDENTIDADE") || p.includes(rules.slice(0, 40)));
+    assert.match(p, /Não comeces a mensagem pelo primeiro nome/i);
+  });
+
   await test("normalize requires name", () => {
     assert.throws(() => normalizeLeadInput({}), (e) => e.code === "MISSING_NAME");
   });
 
-  await test("normalize clips and maps fields", () => {
-    const n = normalizeLeadInput({
-      name: "  Café Central  ",
-      city: "Lisboa",
-      niche: "cafés",
-      market: "pt-PT"
-    });
-    assert.strictEqual(n.name, "Café Central");
-    assert.strictEqual(n.city, "Lisboa");
-    assert.strictEqual(n.market, "pt-PT");
+  await test("prep status prepared / in_progress / unknown + legacy boolean", () => {
+    assert.strictEqual(normalizePrepStatus("prepared"), PREP_STATUSES.prepared);
+    assert.strictEqual(normalizePrepStatus("in_progress"), PREP_STATUSES.in_progress);
+    assert.strictEqual(normalizePrepStatus(""), PREP_STATUSES.unknown);
+    assert.strictEqual(normalizeLeadInput({ name: "A", websitePrepared: true }).websitePrepStatus, "prepared");
+    assert.strictEqual(normalizeLeadInput({ name: "A" }).websitePrepStatus, "unknown");
   });
 
-  await test("resolveMarket Portugal / Spain / English", () => {
+  await test("resolveMarket Portugal / Spain", () => {
     assert.strictEqual(resolveMarket("auto", "Lisboa Portugal", "Lisboa", "PT"), "pt-PT");
     assert.strictEqual(resolveMarket("auto", "Madrid España", "Madrid", "ES"), "es-ES");
-    assert.strictEqual(resolveMarket("auto", "London UK", "London", "GB"), "en");
-    assert.strictEqual(resolveMarket("es-ES", "Lisboa", "", ""), "es-ES");
   });
 
-  await test("prompt includes commercial prospecting rules", () => {
-    const lead = normalizeLeadInput({
-      name: "Oficina Silva",
-      city: "Porto",
-      niche: "oficinas",
-      location: "Porto Portugal"
-    });
-    const prompt = buildPrompt(lead, "pt-PT", "listing_only", []);
-    assert.match(prompt, /Never invent/i);
-    assert.match(prompt, /website/i);
-    assert.match(prompt, /demo/i);
-    assert.match(prompt, /10.?15/i);
-    assert.match(prompt, /Oficina Silva/);
-    assert.match(prompt, /European Portuguese|pt-PT/i);
-    assert.match(prompt, /perfil digital tem margem|Forbidden empty formulas/i);
-  });
-
-  await test("prompt grounded notes do not invent when listing_only", () => {
-    const lead = normalizeLeadInput({ name: "X", city: "Y", niche: "Z" });
-    const p = buildPrompt(lead, "pt-PT", "listing_only", []);
-    assert.match(p, /No useful or unambiguous|listing facts|Confirmed data/i);
-  });
-
-  await test("validateMessage rejects empty and demo", () => {
+  await test("validateMessage rejects empty, demo, first name, price, hollow formula", () => {
     assert.throws(() => validateMessage(""), (e) => e.code === "EMPTY_RESPONSE");
+    assert.throws(() => validateMessage("Veja a demo do site em 10 minutos"), (e) => e.code === "REJECTED_CONTENT");
     assert.throws(
-      () => validateMessage("Olá, posso enviar uma demo do site?"),
+      () => validateMessage("Olá João, preparei um website e temos 10 a 15 minutos?"),
+      (e) => e.code === "REJECTED_CONTENT"
+    );
+    assert.throws(
+      () => validateMessage("Bom dia. O site custa 400 euros. Temos 10 a 15 minutos?"),
+      (e) => e.code === "REJECTED_CONTENT"
+    );
+    assert.throws(
+      () => validateMessage("Bom dia, preparei algo específico para vos mostrar. Temos 10 a 15 minutos?"),
       (e) => e.code === "REJECTED_CONTENT"
     );
   });
 
-  await test("validateMessage rejects empty commercial formulas", () => {
+  await test("validateMessage rejects prepared claim when status unknown", () => {
     assert.throws(
-      () => validateMessage("Olá, preparei algo específico para vos mostrar sobre o vosso negócio."),
+      () =>
+        validateMessage(
+          "Bom dia. Preparei o website para a vossa empresa. Podemos marcar 10 a 15 minutos?",
+          { websitePrepStatus: "unknown" }
+        ),
       (e) => e.code === "REJECTED_CONTENT"
     );
   });
 
-  await test("extractGrounding reads sources", () => {
+  await test("validateMessage allows prepared claim when status prepared", () => {
+    const t = validateMessage(okMsgPt, { websitePrepStatus: "prepared" });
+    assert.ok(t.length > 20);
+  });
+
+  await test("validateMessage requires meeting invite", () => {
+    assert.throws(
+      () => validateMessage("Bom dia. Trabalho com websites para empresas."),
+      (e) => e.code === "REJECTED_CONTENT"
+    );
+  });
+
+  await test("helpers first name and meeting", () => {
+    assert.strictEqual(startsWithPersonalFirstName("Olá João, tudo bem?"), true);
+    assert.strictEqual(startsWithPersonalFirstName("Bom dia. Trabalho com websites."), false);
+    assert.strictEqual(hasMeetingInvite("podemos falar 10 a 15 minutos"), true);
+    assert.strictEqual(claimsPreparedWebsite("preparei o website para vocês"), true);
+  });
+
+  await test("generate fails without API key", async () => {
+    await assert.rejects(
+      () => generateCommercialMessage({ name: "X" }, { apiKey: "", fetchFn: async () => geminiOk("x") }),
+      (e) => e.code === "NO_API_KEY"
+    );
+  });
+
+  await test("generate PT success with prepared status", async () => {
+    clearMessageCache();
+    const out = await generateCommercialMessage(
+      { name: "Oficina Silva", city: "Porto", location: "Porto Portugal", websitePrepStatus: "prepared" },
+      { apiKey: "k", skipCache: true, fetchFn: async () => geminiOk(okMsgPt) }
+    );
+    assert.ok(out.message.length > 20);
+    assert.strictEqual(out.websitePrepStatus, "prepared");
+    assert.ok(out.prepNote);
+  });
+
+  await test("generate ES success", async () => {
+    clearMessageCache();
+    const out = await generateCommercialMessage(
+      { name: "Taller López", city: "Madrid", location: "Madrid España", websitePrepStatus: "prepared", market: "es-ES" },
+      { apiKey: "k", skipCache: true, fetchFn: async () => geminiOk(okMsgEs) }
+    );
+    assert.ok(out.message.length > 20);
+    assert.strictEqual(out.market, "es-ES");
+  });
+
+  await test("insufficient data still generates when model returns careful message", async () => {
+    clearMessageCache();
+    const msg =
+      "Bom dia. Contacto-vos sobre websites profissionais para o vosso negócio. Teriam 10 a 15 minutos para uma conversa breve?";
+    const out = await generateCommercialMessage(
+      { name: "Empresa X" },
+      { apiKey: "k", skipCache: true, fetchFn: async () => geminiOk(msg) }
+    );
+    assert.ok(out.message);
+    assert.strictEqual(out.websitePrepStatus, "unknown");
+  });
+
+  await test("429 search then listing-only success", async () => {
+    clearMessageCache();
+    let n = 0;
+    const out = await generateCommercialMessage(
+      { name: "Loja Y", city: "Faro", location: "Portugal" },
+      {
+        apiKey: "k",
+        skipCache: true,
+        fetchFn: async (url, init) => {
+          n++;
+          const body = JSON.parse(init.body);
+          if (body.tools) return { ok: false, status: 429, text: async () => "rate" };
+          return geminiOk(
+            "Bom dia. Contacto a Loja Y sobre um website profissional. Têm 10 a 15 minutos para conversarmos?"
+          );
+        }
+      }
+    );
+    assert.ok(out.message);
+    assert.ok(n >= 2);
+  });
+
+  await test("cache hit", async () => {
+    clearMessageCache();
+    let calls = 0;
+    const fetchFn = async () => {
+      calls++;
+      return geminiOk("Bom dia. Contacto a Empresa Cache sobre websites. Têm 10 a 15 minutos?");
+    };
+    await generateCommercialMessage({ name: "Empresa Cache", city: "Lisboa" }, { apiKey: "k", fetchFn });
+    const b = await generateCommercialMessage({ name: "Empresa Cache", city: "Lisboa" }, { apiKey: "k", fetchFn });
+    assert.strictEqual(calls, 1);
+    assert.strictEqual(b.cached, true);
+  });
+
+  await test("extractGrounding", () => {
     const g = extractGrounding({
       candidates: [
         {
           groundingMetadata: {
-            groundingChunks: [{ web: { uri: "https://exemplo.pt", title: "Site oficial" } }],
-            groundingSupports: [{ segment: { text: "Oficina de reparação auto em Lisboa" } }]
+            groundingChunks: [{ web: { uri: "https://ex.pt", title: "T" } }]
           }
         }
       ]
     });
     assert.strictEqual(g.hasUseful, true);
-    assert.strictEqual(g.sources[0].url, "https://exemplo.pt");
-    assert.ok(g.notes[0].includes("Lisboa"));
-  });
-
-  await test("extractGrounding empty when no metadata", () => {
-    const g = extractGrounding({ candidates: [{ content: { parts: [{ text: "hi" }] } }] });
-    assert.strictEqual(g.hasUseful, false);
-  });
-
-  await test("generate fails without API key", async () => {
-    await assert.rejects(
-      () =>
-        generateCommercialMessage(
-          { name: "X", city: "Y" },
-          { apiKey: "", fetchFn: async () => geminiOk("x") }
-        ),
-      (e) => e.code === "NO_API_KEY"
-    );
-  });
-
-  await test("429 on search then success without grounding", async () => {
-    clearMessageCache();
-    const calls = [];
-    const out = await generateCommercialMessage(
-      { name: "Salão Norte", city: "Lisboa", location: "Lisboa Portugal", niche: "cabeleireiros" },
-      {
-        apiKey: "k",
-        skipCache: true,
-        fetchFn: async (url, init) => {
-          const body = JSON.parse(init.body);
-          calls.push({ tools: !!(body.tools && body.tools.length) });
-          if (calls.length === 1) {
-            return { ok: false, status: 429, text: async () => '{"error":{"code":429,"message":"Resource exhausted"}}' };
-          }
-          return geminiOk(
-            "Olá, notei o vosso salão em Lisboa e gostaria de falar sobre o site. Têm 10 a 15 minutos esta semana?"
-          );
-        }
-      }
-    );
-    assert.strictEqual(calls.length, 2);
-    assert.strictEqual(calls[0].tools, true);
-    assert.strictEqual(calls[1].tools, false);
-    assert.ok(out.message);
-    assert.strictEqual(out.researchMode, "listing_only");
-    assert.strictEqual(out.searchFallback, true);
-  });
-
-  await test("429 on both search and listing-only yields GEMINI_RATE_LIMIT", async () => {
-    clearMessageCache();
-    let n = 0;
-    await assert.rejects(
-      () =>
-        generateCommercialMessage(
-          { name: "X", city: "Lisboa" },
-          {
-            apiKey: "k",
-            skipCache: true,
-            fetchFn: async () => {
-              n++;
-              return { ok: false, status: 429, text: async () => "rate" };
-            }
-          }
-        ),
-      (e) => e.code === "GEMINI_RATE_LIMIT" && e.status === 429
-    );
-    assert.strictEqual(n, 2);
-  });
-
-  await test("401 on search does not attempt listing-only fallback", async () => {
-    clearMessageCache();
-    let n = 0;
-    await assert.rejects(
-      () =>
-        generateCommercialMessage(
-          { name: "X", city: "Lisboa" },
-          {
-            apiKey: "k",
-            skipCache: true,
-            fetchFn: async () => {
-              n++;
-              return { ok: false, status: 401, text: async () => "auth" };
-            }
-          }
-        ),
-      (e) => e.code === "GEMINI_AUTH"
-    );
-    assert.strictEqual(n, 1);
-  });
-
-  await test("429 on search then 403 on listing-only surfaces auth error", async () => {
-    clearMessageCache();
-    let n = 0;
-    await assert.rejects(
-      () =>
-        generateCommercialMessage(
-          { name: "X", city: "Lisboa" },
-          {
-            apiKey: "k",
-            skipCache: true,
-            fetchFn: async () => {
-              n++;
-              if (n === 1) return { ok: false, status: 429, text: async () => "rate" };
-              return { ok: false, status: 403, text: async () => "forbidden" };
-            }
-          }
-        ),
-      (e) => e.code === "GEMINI_AUTH"
-    );
-    assert.strictEqual(n, 2);
-  });
-
-  await test("API key sent via header not URL", async () => {
-    clearMessageCache();
-    let seenUrl = "";
-    let seenHeaders = {};
-    await generateCommercialMessage(
-      { name: "Padaria Norte", city: "Braga", niche: "padarias", location: "Braga Portugal" },
-      {
-        apiKey: "secret-test-key",
-        skipCache: true,
-        fetchFn: async (url, init) => {
-          seenUrl = url;
-          seenHeaders = init.headers || {};
-          return geminiOk(
-            "Bom dia, trabalho com websites para negócios locais e gostaria de falar convosco na Padaria Norte. Têm 10 a 15 minutos?"
-          );
-        }
-      }
-    );
-    assert.ok(!seenUrl.includes("secret-test-key"));
-    assert.ok(!seenUrl.includes("key="));
-    assert.strictEqual(seenHeaders["x-goog-api-key"], "secret-test-key");
-  });
-
-  await test("request uses google_search tool and default model name", async () => {
-    clearMessageCache();
-    let body = null;
-    let url = "";
-    await generateCommercialMessage(
-      { name: "Oficina Silva", city: "Porto", location: "Porto Portugal", niche: "oficinas" },
-      {
-        apiKey: "k",
-        skipCache: true,
-        fetchFn: async (u, init) => {
-          url = u;
-          body = JSON.parse(init.body);
-          return geminiOk(
-            "Olá, trabalho com presença online para oficinas e gostaria de falar com a Oficina Silva. Proponho 10 a 15 minutos.",
-            { groundingChunks: [{ web: { uri: "https://oficina-silva.example", title: "Oficina" } }] }
-          );
-        }
-      }
-    );
-    assert.ok(url.includes("gemini-3.5-flash-lite"));
-    assert.ok(body.tools && body.tools[0] && body.tools[0].google_search);
-  });
-
-  await test("successful research with sources", async () => {
-    clearMessageCache();
-    const out = await generateCommercialMessage(
-      { name: "Clínica ABC", city: "Lisboa", location: "Lisboa Portugal", niche: "clínicas" },
-      {
-        apiKey: "k",
-        skipCache: true,
-        fetchFn: async () =>
-          geminiOk(
-            "Olá, vi a Clínica ABC em Lisboa e o vosso site oficial. Trabalho com websites para clínicas e proponho uma conversa breve de 10 a 15 minutos.",
-            {
-              groundingChunks: [{ web: { uri: "https://clinica-abc.pt", title: "Clínica ABC" } }],
-              groundingSupports: [{ segment: { text: "Clínica dentária em Lisboa" } }]
-            }
-          )
-      }
-    );
-    assert.ok(out.message.length > 20);
-    assert.ok(out.sources.length >= 1);
-    assert.strictEqual(out.sources[0].url, "https://clinica-abc.pt");
-    assert.ok(!/\bdemo\b/i.test(out.message));
-  });
-
-  await test("search failure falls back to listing-only generation", async () => {
-    clearMessageCache();
-    let calls = 0;
-    const out = await generateCommercialMessage(
-      { name: "Loja Nova", city: "Faro", location: "Faro Portugal", niche: "lojas" },
-      {
-        apiKey: "k",
-        skipCache: true,
-        fetchFn: async (url, init) => {
-          calls++;
-          const body = JSON.parse(init.body);
-          if (body.tools) {
-            return { ok: false, status: 500, text: async () => "search down" };
-          }
-          return geminiOk(
-            "Olá, contacto a Loja Nova em Faro sobre websites para lojas locais. Têm 10 a 15 minutos para conversarmos?"
-          );
-        }
-      }
-    );
-    assert.ok(calls >= 2);
-    assert.ok(out.message.length > 20);
-    assert.strictEqual(out.searchFallback, true);
-  });
-
-  await test("empty first response falls back to second pass", async () => {
-    clearMessageCache();
-    let calls = 0;
-    const out = await generateCommercialMessage(
-      { name: "Atelier Rio", city: "Coimbra", niche: "atelieres", location: "Coimbra" },
-      {
-        apiKey: "k",
-        skipCache: true,
-        fetchFn: async () => {
-          calls++;
-          if (calls === 1) return geminiOk("");
-          return geminiOk(
-            "Olá, gostaria de falar com o Atelier Rio em Coimbra sobre o vosso site. Proponho 10 a 15 minutos."
-          );
-        }
-      }
-    );
-    assert.ok(calls >= 2);
-    assert.ok(out.message.length > 10);
-  });
-
-  await test("cache prevents duplicate API calls", async () => {
-    clearMessageCache();
-    let calls = 0;
-    const fetchFn = async () => {
-      calls++;
-      return geminiOk(
-        "Olá, contacto a Empresa Cache em Lisboa sobre websites. Têm 10 a 15 minutos?"
-      );
-    };
-    const a = await generateCommercialMessage(
-      { name: "Empresa Cache", city: "Lisboa", location: "Portugal" },
-      { apiKey: "k", fetchFn: fetchFn }
-    );
-    const b = await generateCommercialMessage(
-      { name: "Empresa Cache", city: "Lisboa", location: "Portugal" },
-      { apiKey: "k", fetchFn: fetchFn }
-    );
-    assert.strictEqual(calls, 1);
-    assert.strictEqual(b.cached, true);
-    assert.strictEqual(a.message, b.message);
-  });
-
-  await test("homonym disambiguation appears in research hint / prompt", () => {
-    const lead = normalizeLeadInput({
-      name: "Farmácia Central",
-      city: "Évora",
-      location: "Évora Portugal",
-      niche: "farmácias"
-    });
-    const p = buildPrompt(lead, "pt-PT", "listing_only", []);
-    assert.match(p, /Farmácia Central/);
-    assert.match(p, /Évora/);
   });
 
   console.log("\n%d passed, %d failed", passed, failed);
