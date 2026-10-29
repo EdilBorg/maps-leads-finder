@@ -8,13 +8,12 @@ if (src.includes("function systemPromptRules") && src.includes("websitePrepStatu
   console.log("[ensure-gemini-commercial] already applied");
   process.exit(0);
 }
-const a = path.join(__dirname, "gemini-message.payload.a.b64");
-const b = path.join(__dirname, "gemini-message.payload.b.b64");
-if (fs.existsSync(a) && fs.existsSync(b)) {
-  const b64 = (fs.readFileSync(a, "utf8") + fs.readFileSync(b, "utf8")).replace(/\s+/g, "");
-  fs.writeFileSync(target, Buffer.from(b64, "base64"));
-  console.log("[ensure-gemini-commercial] lib/gemini-message.js updated from payload");
+const p1 = path.join(__dirname, "gemini-src-part1.txt");
+const p2 = path.join(__dirname, "gemini-src-part2.txt");
+if (fs.existsSync(p1) && fs.existsSync(p2)) {
+  fs.writeFileSync(target, fs.readFileSync(p1, "utf8") + fs.readFileSync(p2, "utf8"));
+  console.log("[ensure-gemini-commercial] lib/gemini-message.js assembled from source parts");
   process.exit(0);
 }
-console.warn("[ensure-gemini-commercial] payload parts missing; leaving existing lib/gemini-message.js unchanged");
+console.warn("[ensure-gemini-commercial] source parts missing; leaving module unchanged");
 process.exit(0);
