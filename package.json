@@ -1,6 +1,6 @@
 {
   "name": "maps-leads-finder",
-  "version": "6.4.4",
+  "version": "6.5.0",
   "description": "Prospecção de empresas sem website — Apify + OpenStreetMap, acesso por OTP",
   "main": "bootstrap.js",
   "scripts": {

@@ -3,7 +3,9 @@
  * Idempotent runtime patches for server.js:
  * - Cache-Control no-cache for JS/CSS
  * - Delegate searchOpenStreetMap to lib/osm-search.js (per-endpoint AbortController)
- * - Clearer /api/status version field
+ * - hasOsm reflects configuration (not always true)
+ * - unhandledRejection / uncaughtException handlers so commercial failures never kill Node
+ * - Clearer /api/status version + osmConfigured / apifyConfigured
  */
 const fs = require("fs");
 const path = require("path");
@@ -67,20 +69,51 @@ if (!src.includes('require("./lib/osm-search")') && !src.includes("require('./li
   }
 }
 
-if (!src.includes("osmConfigured") && src.includes('app.get("/api/status"')) {
-  if (src.includes('version: "6.3.1", message: "ready"')) {
-    src = src.replace(
-      'version: "6.3.1", message: "ready"',
-      'version: "6.4.1", osmConfigured: osm, message: "ready"'
-    );
-    changed = true;
-  } else if (src.includes('version: "6.3.2", message: "ready"')) {
-    src = src.replace(
-      'version: "6.3.2", message: "ready"',
-      'version: "6.4.1", osmConfigured: osm, message: "ready"'
-    );
+// hasOsm should not always return true
+if (src.includes("function hasOsm() {\n  return true;\n}")) {
+  src = src.replace(
+    "function hasOsm() {\n  return true;\n}",
+    "function hasOsm() {\n  return Array.isArray(OVERPASS_ENDPOINTS) && OVERPASS_ENDPOINTS.length > 0;\n}"
+  );
+  changed = true;
+}
+
+// unhandledRejection / uncaughtException — only once
+if (!src.includes("unhandledRejection")) {
+  const listenNeedle = "app.listen(PORT, () => {";
+  if (src.includes(listenNeedle)) {
+    const handlers =
+      "process.on(\"unhandledRejection\", function (reason) {\n" +
+      "  console.error(\"[process] unhandledRejection:\", reason && reason.message ? reason.message : reason);\n" +
+      "});\n" +
+      "process.on(\"uncaughtException\", function (err) {\n" +
+      "  console.error(\"[process] uncaughtException:\", err && err.message ? err.message : err);\n" +
+      "  // Do not process.exit — keep Express alive for recoverable faults\n" +
+      "});\n\n";
+    src = src.replace(listenNeedle, handlers + listenNeedle);
     changed = true;
   }
+}
+
+// status version + flags
+if (src.includes('version: "6.3.1", message: "ready"')) {
+  src = src.replace(
+    'version: "6.3.1", message: "ready"',
+    'version: "6.5.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+  );
+  changed = true;
+} else if (src.includes('version: "6.3.2", message: "ready"')) {
+  src = src.replace(
+    'version: "6.3.2", message: "ready"',
+    'version: "6.5.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+  );
+  changed = true;
+} else if (src.includes('version: "6.4.1"') && !src.includes("osmConfigured")) {
+  src = src.replace(
+    /version:\s*"6\.4\.1"[^}]*/,
+    'version: "6.5.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+  );
+  changed = true;
 }
 
 if (changed) {
