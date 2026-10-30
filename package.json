@@ -1,12 +1,12 @@
 {
   "name": "maps-leads-finder",
-  "version": "6.5.1",
+  "version": "6.6.0",
   "description": "Prospecção de empresas sem website — Apify + OpenStreetMap, acesso por OTP",
   "main": "bootstrap.js",
   "scripts": {
     "start": "node bootstrap.js",
     "dev": "node bootstrap.js",
-    "test": "node tests/pipeline.test.js && node tests/gemini-message.test.js && node tests/osm-search.test.js && node tests/template-contract.test.js && node tests/search-json-safe.test.js && node tests/apify-timeout.test.js && node tests/stability-651.test.js",
+    "test": "node tests/pipeline.test.js && node tests/gemini-message.test.js && node tests/osm-search.test.js && node tests/template-contract.test.js && node tests/search-json-safe.test.js && node tests/apify-timeout.test.js && node tests/stability-651.test.js && node tests/server-osm-integration.test.js",
     "postinstall": "node scripts/ensure-apify-fix.js && node scripts/ensure-index-fix.js && node scripts/ensure-message-route.js && node scripts/ensure-msg-styles.js && node scripts/ensure-server-hardening.js && node scripts/ensure-cache-bust.js && node scripts/ensure-template-json-safe.js && node scripts/ensure-index-search-json-safe.js && node scripts/ensure-gemini-commercial.js"
   },
   "dependencies": {
