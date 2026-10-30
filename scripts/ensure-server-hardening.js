@@ -4,14 +4,18 @@
  * - Cache-Control no-cache for JS/CSS
  * - Delegate searchOpenStreetMap to lib/osm-search.js (per-endpoint AbortController)
  * - hasOsm reflects configuration (not always true)
- * - unhandledRejection / uncaughtException handlers so commercial failures never kill Node
+ * - unhandledRejection logs; uncaughtException logs full stack and exits (supervisor restart)
  * - Clearer /api/status version + osmConfigured / apifyConfigured
+ *
+ * Critical process-handler patch: if expected handlers cannot be applied when missing,
+ * exit non-zero so bootstrap does not start an unhardened server.
  */
 const fs = require("fs");
 const path = require("path");
 const serverPath = path.join(__dirname, "..", "server.js");
 let src = fs.readFileSync(serverPath, "utf8");
 let changed = false;
+let criticalFailed = false;
 
 if (!src.includes("setHeaders") && src.includes("express.static")) {
   const oldStatic =
@@ -69,7 +73,6 @@ if (!src.includes('require("./lib/osm-search")') && !src.includes("require('./li
   }
 }
 
-// hasOsm should not always return true
 if (src.includes("function hasOsm() {\n  return true;\n}")) {
   src = src.replace(
     "function hasOsm() {\n  return true;\n}",
@@ -78,42 +81,87 @@ if (src.includes("function hasOsm() {\n  return true;\n}")) {
   changed = true;
 }
 
-// unhandledRejection / uncaughtException — only once
-if (!src.includes("unhandledRejection")) {
+const SAFE_HANDLERS =
+  "process.on(\"unhandledRejection\", function (reason) {\n" +
+  "  console.error(\"[process] unhandledRejection:\", reason && reason.stack ? reason.stack : reason);\n" +
+  "});\n" +
+  "process.on(\"uncaughtException\", function (err) {\n" +
+  "  console.error(\"[process] uncaughtException:\", err && err.stack ? err.stack : err);\n" +
+  "  // Fatal: do not continue in an unknown state — let the platform supervisor restart\n" +
+  "  process.exit(1);\n" +
+  "});\n\n";
+
+const DANGEROUS_KEEP_ALIVE =
+  "process.on(\"uncaughtException\", function (err) {\n" +
+  "  console.error(\"[process] uncaughtException:\", err && err.message ? err.message : err);\n" +
+  "  // Do not process.exit — keep Express alive for recoverable faults\n" +
+  "});";
+
+if (src.includes("Do not process.exit — keep Express alive")) {
+  const blockStart = src.indexOf('process.on("unhandledRejection"');
   const listenNeedle = "app.listen(PORT, () => {";
-  if (src.includes(listenNeedle)) {
-    const handlers =
-      "process.on(\"unhandledRejection\", function (reason) {\n" +
-      "  console.error(\"[process] unhandledRejection:\", reason && reason.message ? reason.message : reason);\n" +
-      "});\n" +
+  const listenIdx = src.indexOf(listenNeedle);
+  if (blockStart >= 0 && listenIdx > blockStart) {
+    src = src.slice(0, blockStart) + SAFE_HANDLERS + src.slice(listenIdx);
+    changed = true;
+    console.log("[ensure-server-hardening] replaced keep-alive uncaughtException with exit(1)");
+  } else if (src.includes(DANGEROUS_KEEP_ALIVE)) {
+    src = src.replace(DANGEROUS_KEEP_ALIVE,
       "process.on(\"uncaughtException\", function (err) {\n" +
-      "  console.error(\"[process] uncaughtException:\", err && err.message ? err.message : err);\n" +
-      "  // Do not process.exit — keep Express alive for recoverable faults\n" +
-      "});\n\n";
-    src = src.replace(listenNeedle, handlers + listenNeedle);
+      "  console.error(\"[process] uncaughtException:\", err && err.stack ? err.stack : err);\n" +
+      "  process.exit(1);\n" +
+      "});"
+    );
     changed = true;
   }
 }
 
-// status version + flags
+if (!src.includes("unhandledRejection")) {
+  const listenNeedle = "app.listen(PORT, () => {";
+  if (src.includes(listenNeedle)) {
+    src = src.replace(listenNeedle, SAFE_HANDLERS + listenNeedle);
+    changed = true;
+  } else {
+    criticalFailed = true;
+    console.error("[ensure-server-hardening] CRITICAL: cannot install process handlers (app.listen not found)");
+  }
+}
+
+if (src.includes("uncaughtException") && !src.includes("process.exit(1)") && src.includes("unhandledRejection")) {
+  if (src.includes("Do not process.exit")) {
+    criticalFailed = true;
+    console.error("[ensure-server-hardening] CRITICAL: uncaughtException still keeps process alive");
+  }
+}
+
 if (src.includes('version: "6.3.1", message: "ready"')) {
   src = src.replace(
     'version: "6.3.1", message: "ready"',
-    'version: "6.5.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+    'version: "6.5.1", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
   );
   changed = true;
 } else if (src.includes('version: "6.3.2", message: "ready"')) {
   src = src.replace(
     'version: "6.3.2", message: "ready"',
-    'version: "6.5.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+    'version: "6.5.1", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
   );
   changed = true;
 } else if (src.includes('version: "6.4.1"') && !src.includes("osmConfigured")) {
   src = src.replace(
     /version:\s*"6\.4\.1"[^}]*/,
-    'version: "6.5.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+    'version: "6.5.1", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
   );
   changed = true;
+} else if (src.includes('version: "6.5.0"') && !src.includes("osmConfigured")) {
+  src = src.replace(
+    /version:\s*"6\.5\.0"[^}]*/,
+    'version: "6.5.1", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+  );
+  changed = true;
+}
+
+if (criticalFailed) {
+  process.exit(1);
 }
 
 if (changed) {
