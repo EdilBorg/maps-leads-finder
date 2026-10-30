@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Production entry: run ensure scripts in child processes, then start the app.
+ * Production entry: restore permanent server if needed, run ensure scripts in child processes, then start the app.
  * Never require() ensure scripts in this process — they may call process.exit().
  */
 const path = require("path");
@@ -29,6 +29,7 @@ function runEnsure(scriptRel) {
   console.log("[bootstrap] " + scriptRel + " ok");
 }
 
+runEnsure("scripts/write-permanent-server.js");
 runEnsure("scripts/ensure-apify-fix.js");
 runEnsure("scripts/ensure-index-fix.js");
 runEnsure("scripts/ensure-message-route.js");
