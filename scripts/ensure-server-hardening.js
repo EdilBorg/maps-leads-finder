@@ -65,7 +65,7 @@ if (!src.includes('require("./lib/osm-search")') && !src.includes("require('./li
       "    buildOverpassQuery,\n" +
       "    normalizeOsmElement,\n" +
       "    fetchFn: fetch,\n" +
-      "    timeoutMs: 25000\n" +
+      "    timeoutMs: 35000\n" +
       "  });\n" +
       "}\n";
     src = src.slice(0, start) + wrapper + src.slice(end);
@@ -137,25 +137,31 @@ if (src.includes("uncaughtException") && !src.includes("process.exit(1)") && src
 if (src.includes('version: "6.3.1", message: "ready"')) {
   src = src.replace(
     'version: "6.3.1", message: "ready"',
-    'version: "6.5.1", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+    'version: "6.6.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
   );
   changed = true;
 } else if (src.includes('version: "6.3.2", message: "ready"')) {
   src = src.replace(
     'version: "6.3.2", message: "ready"',
-    'version: "6.5.1", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+    'version: "6.6.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
   );
   changed = true;
 } else if (src.includes('version: "6.4.1"') && !src.includes("osmConfigured")) {
   src = src.replace(
     /version:\s*"6\.4\.1"[^}]*/,
-    'version: "6.5.1", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+    'version: "6.6.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
   );
   changed = true;
 } else if (src.includes('version: "6.5.0"') && !src.includes("osmConfigured")) {
   src = src.replace(
     /version:\s*"6\.5\.0"[^}]*/,
-    'version: "6.5.1", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+    'version: "6.6.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
+  );
+  changed = true;
+} else if (src.includes('version: "6.5.1"') && !src.includes("osmConfigured")) {
+  src = src.replace(
+    /version:\s*"6\.5\.1"[^}]*/,
+    'version: "6.6.0", osmConfigured: osm, apifyConfigured: apify, message: "ready"'
   );
   changed = true;
 }
