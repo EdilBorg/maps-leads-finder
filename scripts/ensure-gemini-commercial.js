@@ -1,8 +1,8 @@
 "use strict";
 /**
- * Ensures lib/gemini-message.js has commercial strategy + 6.5.0 stability fixes.
- * Prefer marker check. If stability markers missing, apply surgical patches in-place
- * so production gains quota handling and safe inflight cleanup without full rewrite.
+ * Ensures lib/gemini-message.js has commercial strategy + stability fixes.
+ * Applies surgical patches when markers are missing. Idempotent.
+ * Claims validation must require website/site noun + prepared claim (not "he preparado" alone).
  */
 const fs = require("fs");
 const path = require("path");
@@ -32,7 +32,6 @@ if (missingCore.length) {
 
 let changed = false;
 
-// 1) Safer inflight cleanup
 if (src.indexOf("work.finally(function () { inflight.delete(key); });") !== -1) {
   src = src.replace(
     "work.finally(function () { inflight.delete(key); });",
@@ -42,7 +41,6 @@ if (src.indexOf("work.finally(function () { inflight.delete(key); });") !== -1) 
   console.log("[ensure-gemini-commercial] patched inflight cleanup");
 }
 
-// 2) Quota-aware mapGeminiHttpError (inject helper + expand 429 branch)
 if (src.indexOf("isQuotaExhaustedBody") === -1 && src.indexOf("function mapGeminiHttpError") !== -1) {
   const helper =
     "function isQuotaExhaustedBody(bodyText) {\n" +
@@ -77,7 +75,6 @@ if (src.indexOf("isQuotaExhaustedBody") === -1 && src.indexOf("function mapGemin
   }
 }
 
-// 3) Skip listing fallback on quota exceeded
 if (src.indexOf("skipListingFallback") === -1 && src.indexOf("const searchError = mapGeminiHttpError") !== -1) {
   const needle =
     "if (first.res.status === 401 || first.res.status === 403) throw searchError;";
@@ -103,19 +100,44 @@ if (src.indexOf("skipListingFallback") === -1 && src.indexOf("const searchError 
   }
 }
 
-// 4) Broaden claimsPreparedWebsite if still narrow
-if (src.indexOf("tenho\\s+(um\\s+)?(website|site)\\s+preparad") === -1) {
-  const newClaims =
-    "function claimsPreparedWebsite(text) {\n  const t = String(text || \"\");\n  return (\n    /website\\s+(foi\\s+)?preparad/i.test(t) ||\n    /site\\s+(foi\\s+)?preparad/i.test(t) ||\n    /sitio\\s+(web\\s+)?(ya\\s+)?preparad/i.test(t) ||\n    /preparei\\s+(o\\s+)?(vosso\\s+|seu\\s+|su\\s+)?(website|site|sitio)/i.test(t) ||\n    /he\\s+preparado\\s+(un|uno|el|un\\s+)?\\s*(sitio|website|site)?/i.test(t) ||\n    /prepar(ei|ado|amos|é|ado)\\s+(um\\s+|un\\s+|uno\\s+|o\\s+|el\\s+)?(website|site|sitio)/i.test(t) ||\n    /prepared\\s+(a\\s+|an\\s+|the\\s+)?(website|site)/i.test(t) ||\n    /website\\s+(has\\s+been|is|was)\\s+prepared/i.test(t) ||\n    /preparad[oa]\\s+(um|un|uno|el|o)\\s+(website|site|sitio)/i.test(t) ||\n    /(já\\s+)?tenho\\s+(um\\s+)?(website|site)\\s+preparad/i.test(t) ||\n    /(ya\\s+)?tengo\\s+(un\\s+)?(sitio|website|site)\\s+preparad/i.test(t) ||\n    /I\\s+(have\\s+)?prepared\\s+(a\\s+)?(website|site)/i.test(t)\n  );\n}";
-  if (src.indexOf("function claimsPreparedWebsite(text) {") !== -1 && src.indexOf("tenho\\s+(um") === -1) {
-    const start = src.indexOf("function claimsPreparedWebsite(text) {");
-    const end = src.indexOf("\n}\n\nconst MARKET_LOCALES", start);
-    if (start !== -1 && end !== -1) {
-      const afterBrace = end + "\n}".length;
-      src = src.slice(0, start) + newClaims + src.slice(afterBrace);
-      changed = true;
-      console.log("[ensure-gemini-commercial] broadened claimsPreparedWebsite");
-    }
+const STRICT_MARKER = "Incomplete \"he preparado\"";
+if (src.indexOf(STRICT_MARKER) === -1) {
+  const start = src.indexOf("function claimsPreparedWebsite(text) {");
+  const end = src.indexOf("\n}\n\nconst MARKET_LOCALES", start);
+  if (start !== -1 && end !== -1) {
+    const newClaims =
+      "function claimsPreparedWebsite(text) {\n" +
+      "  const t = String(text || \"\");\n" +
+      "  // Require a website/site noun AND a clear prepared-claim binding it.\n" +
+      "  // Incomplete \"he preparado\" / \"preparei\" / \"I have prepared\" alone must fail.\n" +
+      "  if (!/\\b(website|site|sitio(\\s+web)?)\\b/i.test(t)) return false;\n" +
+      "  const patterns = [\n" +
+      "    /preparei\\s+((o|um|vosso|seu|su)\\s+)*(website|site|sitio)/i,\n" +
+      "    /(website|site)\\s+(foi\\s+)?preparad/i,\n" +
+      "    /(já\\s+)?tenho\\s+((um|o)\\s+)?(website|site)\\s+preparad/i,\n" +
+      "    /(o\\s+)?(website|site)\\s+(já\\s+)?(está|esta)\\s+preparad/i,\n" +
+      "    /site\\s+profissional\\s+(já\\s+)?preparad/i,\n" +
+      "    /website\\s+profissional\\s+(já\\s+)?preparad/i,\n" +
+      "    /preparei\\s+((um|o)\\s+)?(website|site)\\s+profissional/i,\n" +
+      "    /he\\s+preparado\\s+((un|uno|el|vuestro|su)\\s+)*(sitio(\\s+web)?|website|site)\\b/i,\n" +
+      "    /(ya\\s+)?tengo\\s+((un)\\s+)?(sitio(\\s+web)?|website|site)\\s+preparad/i,\n" +
+      "    /(el\\s+)?(sitio(\\s+web)?|website)\\s+(ya\\s+)?(está|esta)\\s+preparad/i,\n" +
+      "    /sitio\\s+(web\\s+)?(ya\\s+)?preparad/i,\n" +
+      "    /I\\s+have\\s+prepared\\s+((a|an|the|your)\\s+)*(website|site)\\b/i,\n" +
+      "    /we\\s+(have\\s+)?prepared\\s+((a|an|the|your)\\s+)*(website|site)\\b/i,\n" +
+      "    /prepared\\s+((a|an|the|your)\\s+)*(website|site)\\b/i,\n" +
+      "    /(the\\s+)?(website|site)\\s+(has\\s+been|is|was)\\s+(prepared|ready)\\b/i,\n" +
+      "    /(website|site)\\s+is\\s+ready\\b/i\n" +
+      "  ];\n" +
+      "  for (let i = 0; i < patterns.length; i++) {\n" +
+      "    if (patterns[i].test(t)) return true;\n" +
+      "  }\n" +
+      "  return false;\n" +
+      "}";
+    const afterBrace = end + "\n}".length;
+    src = src.slice(0, start) + newClaims + src.slice(afterBrace);
+    changed = true;
+    console.log("[ensure-gemini-commercial] strict claimsPreparedWebsite applied");
   }
 }
 
@@ -124,10 +146,11 @@ if (changed) {
   console.log("[ensure-gemini-commercial] wrote stability patches to lib/gemini-message.js");
 } else if (
   src.indexOf("isQuotaExhaustedBody") !== -1 &&
-  src.indexOf("work.then(cleanup, cleanup)") !== -1
+  src.indexOf("work.then(cleanup, cleanup)") !== -1 &&
+  src.indexOf(STRICT_MARKER) !== -1
 ) {
   console.log("[ensure-gemini-commercial] strategy + stability markers present — ok");
 } else {
-  console.log("[ensure-gemini-commercial] core present; some optional stability patches already applied or pattern mismatch");
+  console.log("[ensure-gemini-commercial] core present; optional patches already applied or pattern mismatch");
 }
 process.exit(0);
