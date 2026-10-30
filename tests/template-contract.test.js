@@ -53,9 +53,12 @@ test("OSM delegates to lib/osm-search (production implementation)", () => {
   assert.ok(server.includes('require("./lib/osm-search")') || server.includes("require('./lib/osm-search')"));
   assert.ok(server.includes("osmSearch.searchOpenStreetMap"));
   const osmLib = fs.readFileSync(path.join(root, "lib/osm-search.js"), "utf8");
-  const loopIdx = osmLib.indexOf("for (const endpoint");
+  // Per-endpoint AbortController: controller is created inside the endpoints loop body
+  const loopIdx = osmLib.indexOf("for (let i = 0; i < endpoints.length");
+  const altLoop = osmLib.indexOf("for (const endpoint of endpoints)");
+  const loopStart = loopIdx >= 0 ? loopIdx : altLoop;
   const ctrlIdx = osmLib.indexOf("new AbortController()");
-  assert.ok(loopIdx >= 0 && ctrlIdx > loopIdx, "AbortController must be inside endpoint loop in lib/osm-search.js");
+  assert.ok(loopStart >= 0 && ctrlIdx > loopStart, "AbortController must be inside endpoint loop in lib/osm-search.js");
 });
 
 console.log("\n%d passed, %d failed", passed, failed);
