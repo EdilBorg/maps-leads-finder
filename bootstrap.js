@@ -1,7 +1,6 @@
 "use strict";
 /**
  * Production entry: restore complete server.js if needed, run ensure scripts, then start.
- * Never require() ensure scripts in this process — they may call process.exit().
  */
 const path = require("path");
 const { spawnSync } = require("child_process");
