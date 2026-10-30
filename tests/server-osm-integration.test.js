@@ -1,13 +1,30 @@
 "use strict";
 /**
- * Validates that production server.js permanently uses lib/osm-search.js
- * and lib/apify-search.js (not abandoned inline implementations).
+ * Validates that production server.js uses lib/osm-search.js and lib/apify-search.js
+ * after the same ensure scripts that bootstrap.js runs in production.
  */
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 
-const serverPath = path.join(__dirname, "..", "server.js");
+const root = path.join(__dirname, "..");
+for (const script of [
+  "scripts/ensure-message-route.js",
+  "scripts/ensure-server-hardening.js",
+  "scripts/ensure-apify-fix.js"
+]) {
+  const r = spawnSync(process.execPath, [path.join(root, script)], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  if (r.status !== 0) {
+    console.error(script, "failed", r.stdout, r.stderr);
+    process.exit(1);
+  }
+}
+
+const serverPath = path.join(root, "server.js");
 const src = fs.readFileSync(serverPath, "utf8");
 
 let passed = 0, failed = 0;
@@ -22,7 +39,7 @@ function test(name, fn) {
   }
 }
 
-console.log("Server ↔ OSM/Apify integration (main production code)\n");
+console.log("Server ↔ OSM/Apify integration (after ensure scripts / production path)\n");
 
 test("server requires lib/osm-search", function () {
   assert.ok(
